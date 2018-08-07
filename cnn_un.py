@@ -38,7 +38,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='interval of logging training status')
 args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
+args.cuda = False # not args.no_cuda and torch.cuda.is_available()
 
 torch.manual_seed(args.seed)
 if args.cuda:
@@ -159,11 +159,11 @@ def uncertainty_test(model):
 
             plt.figure()
             for i in range(len(rotation_list)):
-                ax = plt.subplot(2, len(rotation_list) / 2, i + 1)
-                plt.text(0.5, -0.5, "{0:.3f}".format(unct_list[i]),
+                ax = plt.subplot(3, len(rotation_list)/3, i + 1)
+                plt.text(0.5, -0.5, "{}\n{}".format(np.round(unct_list[i], 3), str(rotation_list[i])  + u'\xb0'),
                          size=12, ha="center", transform=ax.transAxes)
                 plt.axis('off')
-                plt.gca().set_title(str(rotation_list[i]) + u'\xb0')
+                # plt.gca().set_title(str(rotation_list[i]) + u'\xb0')
                 plt.imshow(image_list[i][0, 0, :, :].data.cpu().numpy())
             plt.show()
             print()
