@@ -12,12 +12,12 @@ A baseline in any vision experiment, we test the classifiers performance and res
 ### Pneumonia Detection
 A more _real world_ challenge would be to test for the presence of pneumonia in an individual based upon a chest x-ray image - [data here](https://www.kaggle.com/paultimothymooney/chest-xray-pneumonia). 
 
-<img src="other/imgs/pneumonia.png" alt="Pneumonia X-Ray" width="500px"/>
+<img src="other/imgs/pneumonia.jpeg" alt="Pneumonia X-Ray" width="400px"/>
 
 ### FlappyBird DQN
 We also train an agent using the DQN of [Mnih et. al.](https://web.stanford.edu/class/psych209/Readings/MnihEtAlHassibis15NatureControlDeepRL.pdf) to play flappybird, replacing the original CNN with a BCNN. Once trained, we inflict adversarial attacks on the agent while playing flappybird.
 
-<img src="other/imgs/flappy_bird.png" alt="Flappy Bird" width="500px"/>
+<img src="other/imgs/flappy_bird.png" alt="Flappy Bird" width="400px"/>
 
 ## Installing
 
