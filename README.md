@@ -9,6 +9,8 @@ Results are collected by establishing baselines and then crafting adversarial ex
 ### MNIST Digit Classification
 A baseline in any vision experiment, we test the classifiers performance and resilience to adversaries when classifying digits from the MNIST database.
 
+<img src="other/imgs/mnist.jpeg" alt="Pneumonia X-Ray" width="400px"/>
+
 ### Pneumonia Detection
 A more _real world_ challenge would be to test for the presence of pneumonia in an individual based upon a chest x-ray image - [data here](https://www.kaggle.com/paultimothymooney/chest-xray-pneumonia). 
 
@@ -19,16 +21,19 @@ We also train an agent using the DQN of [Mnih et. al.](https://web.stanford.edu/
 
 <img src="other/imgs/flappy_bird.png" alt="Flappy Bird" width="400px"/>
 
+
 ## Installing
+
+__Note__: _This work has only been tested on a Linux (Ubuntu 16.04 LTS) machine, code may not works as required on other operating systems._
 
 1. Clone repository 
 ```
 git clone https://github.com/thomaspinder/bayesian_uncertainty
+cd bayesian_uncertainty
 ```
 
-2. Create virual environment 
+2. Create virtual environment 
 ```
-cd bayesian_uncertainty
 pip install virtualenv
 virtualenv env -p python3
 source env/bin/activate
@@ -43,28 +48,29 @@ pip install -r requirements.txt
 ### Train Vision Networks
 Takes approximately 15minutes on an Nvidia 1050ti GPU.
 ```
-python experiments.py 'vision' -m 0
+python src.experiments 'vision' -m 0
 ```
 
 ### Train FlappyBird Agent
 Note, on an Nvidia 1050ti GPU this process took 2.5 days to complete.
 ```
-python experiments.py 'rl'
+python -m src.experiments 'rl'
 ```
 
 
 ## Running Experiments
 ### Computer Vision Tasks
-1. Comparing CNNs against Bayesian CNNs
+
+
+1. Comparing CNNs against Bayesian CNNs in the absence of adversaries
 ```
-python experiments.py 'vision' -m 0
+python -m src.experiments 'vision' -m 1
 ```
 
 2. Calculating uncertainty values as MNIST digits are rotated through 180 degrees
 ```
-python experiments.py 'vision' -m 0
+python -m src.experiments 'vision' -m 0
 ```
-
 
 
 ### Reinforcement Learning Tasks
