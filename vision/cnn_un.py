@@ -14,7 +14,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 
-from model import LeNet_standard, LeNet_dropout
+from vision.model import LeNet_standard, LeNet_dropout
 
 torch.manual_seed(123)
 
@@ -215,7 +215,7 @@ def fgsm_test_mc(model, adversary, epsilon = 1):
         predict = output_mean.data.cpu().numpy().argmax()
         results.append([predict, confidence, target.item(), adv])
     results_df = pd.DataFrame(results, columns=['prediction', 'confidence', 'truth', 'adv_status'])
-    results_df.to_csv('cnn_mc_res.csv', index=False)
+    results_df.to_csv('results/fgsm_{}_bnn.csv'.format(epsilon), index=False)
 
 
 class Adversary:

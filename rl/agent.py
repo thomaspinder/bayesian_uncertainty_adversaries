@@ -5,8 +5,8 @@ import torch.optim as optim
 import random
 import glob
 import os
-from config import Config
-from model import Model
+from rl.config import Config
+from rl.model import Model
 
 class Agent:
     def __init__(self, action_set):

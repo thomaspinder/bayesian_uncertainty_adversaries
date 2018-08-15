@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from config import Config 
+from rl.config import Config
 
 
 def make_video(images, fps):

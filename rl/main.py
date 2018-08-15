@@ -4,28 +4,27 @@ import numpy as np
 import argparse
 from ple import PLE
 from ple.games.flappybird import FlappyBird
-from config import Config
-from reply_buffer import Reply_Buffer
-from agent import Agent
-from utils import *
+from rl.config import Config
+from rl.reply_buffer import Reply_Buffer
+from rl.agent import Agent
+from rl.utils import *
 import imageio
 imageio.plugins.ffmpeg.download()
 from moviepy.editor import *
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--logs_path', dest='logs_path', help='path of the checkpoint folder',
-                        default='./logs', type=str)
+                        default='./rl/logs', type=str)
     parser.add_argument('-v', '--video_path', dest='video_path', help='path of the video folder',
-                        default='./video', type=str)
+                        default='./rl/video', type=str)
     parser.add_argument('-r', '--restore', dest='restore', help='restore checkpoint',
                         default=None, type=str)
     parser.add_argument('-t', '--train', dest='train', help='train policy or not',
                         default=True, type=bool)
     args = parser.parse_args()
-
     return args
-
 args = parse_args() 
 
 
