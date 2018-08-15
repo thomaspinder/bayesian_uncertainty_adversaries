@@ -21,7 +21,10 @@ We also train an agent using the DQN of [Mnih et. al.](https://web.stanford.edu/
 
 ## Installing
 
-1. Clone repository ```git clone https://github.com/thomaspinder/bayesian_uncertainty```
+1. Clone repository 
+```
+git clone https://github.com/thomaspinder/bayesian_uncertainty
+```
 
 2. Create virual environment 
 ```
