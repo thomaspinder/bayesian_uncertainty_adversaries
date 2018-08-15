@@ -1,9 +1,29 @@
 # Using Bayesian Deep Learning Approximations to Detect Adversaries in Computer Vision and Reinforcement Learning Tasks
 
+## Contents
+ 
+  * [What Is This All About?](#what-is-this-all-about-)
+    + [Documentaion](#documentaion)
+  * [Tasks](#tasks)
+    + [MNIST Digit Classification](#mnist-digit-classification)
+    + [Pneumonia Detection](#pneumonia-detection)
+    + [FlappyBird DQN](#flappybird-dqn)
+  * [Installing](#installing)
+  * [Setup](#setup)
+    + [Train Vision Networks](#train-vision-networks)
+    + [Train FlappyBird Agent](#train-flappybird-agent)
+  * [Running Experiments](#running-experiments)
+    + [Computer Vision Tasks](#computer-vision-tasks)
+    + [Reinforcement Learning Tasks](#reinforcement-learning-tasks)
+
+
 ## What Is This All About?
 This code repository corresponds to my masters thesis which attempts to detect the presence of adversaries in common AI/ML taks using Bayesian CNNs. Bayesian CNNs are produced based upon the work of [Gal and Ghahramani](https://arxiv.org/pdf/1506.02142.pdf) who prove that by incorporating dropout layers, the neural network converges to a deep Gaussian process. Adversaries are created using the Fast Gradient Sign Method [(FGSM)](https://arxiv.org/pdf/1412.6572.pdf), with varying values of ![equation](http://latex.codecogs.com/gif.latex?%5Cepsilon) being tested. 
 
 Results are collected by establishing baselines and then crafting adversarial examples and observing the performance decrease. Using a BCNN, we then utilise the ability to extract uncertainty measures and test whether an increase in uncertainty can be used to detect the presence of an adversary.
+
+### Documentaion
+Full Documentation can be found [here](https://thomaspinder.github.io/bayesian_uncertainty_adversaries/index.html).
 
 ## Tasks
 ### MNIST Digit Classification
