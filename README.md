@@ -23,7 +23,7 @@ This code repository corresponds to my masters thesis which attempts to detect t
 Results are collected by establishing baselines and then crafting adversarial examples and observing the performance decrease. Using a BCNN, we then utilise the ability to extract uncertainty measures and test whether an increase in uncertainty can be used to detect the presence of an adversary.
 
 ### Documentaion
-Full Documentation can be found [here](https://thomaspinder.github.io/bayesian_uncertainty_adversaries/index.html).
+Full Documentation can be found [here](https://goo.gl/WTkpdK).
 
 ## Tasks
 ### MNIST Digit Classification
@@ -44,7 +44,7 @@ We also train an agent using the DQN of [Mnih et. al.](https://web.stanford.edu/
 
 ## Installing
 
-__Note__: _This work has only been tested on a Linux (Ubuntu 16.04 LTS) machine, code may not works as required on other operating systems._
+__Note__: _This work has only been tested on a Linux (Ubuntu 16.04 LTS) machine, code may not work as required on other operating systems._
 
 1. Clone repository 
 ```

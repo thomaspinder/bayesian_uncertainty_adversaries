@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 import time
 import torch
 import torch.nn as nn
@@ -102,13 +103,13 @@ def train(model, opt, epoch, args, train_loader):
     model.train()
     lr = args.lr * (0.1 ** (epoch // 10))
     opt.param_groups[0]['lr'] = lr
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target) in enumerate(tqdm(train_loader, desc='Batching Training Data')):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data), Variable(target)
         opt.zero_grad()
         output = model(data)
-        loss = F.nll_loss(F.log_softmax(output), target)
+        loss = F.nll_loss(F.log_softmax(output, 0), target)
         loss.backward()
         opt.step()
         if batch_idx % args.log_interval == 0:
@@ -133,17 +134,17 @@ def test(model, args, test_loader):
         test_loss = 0
         correct = 0
         # Data and target are a single pair of images and labels.
-        for data, target in test_loader:
+        for data, target in tqdm(test_loader, desc='Batching Test Data'):
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
             data, target = Variable(data), Variable(target)
             output = model(data)
-            test_loss += F.nll_loss(F.log_softmax(output), target, size_average=False).data[0]  # sum up batch loss
+            test_loss += F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
             pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
         test_loss /= len(test_loader.dataset)
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+        uf.box_print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
 
@@ -163,7 +164,7 @@ def mcdropout_test(model, args, test_loader, stochastic_passes=100):
         model.train()
         test_loss = 0
         correct = 0
-        for data, target in test_loader:
+        for data, target in tqdm(test_loader, desc='Bacthing Test Data'):
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
             data, target = Variable(data), Variable(target)
@@ -171,12 +172,12 @@ def mcdropout_test(model, args, test_loader, stochastic_passes=100):
             for i in range(stochastic_passes):
                 output_list.append(torch.unsqueeze(model(data), 0))
             output_mean = torch.cat(output_list, 0).mean(0)
-            test_loss += F.nll_loss(F.log_softmax(output_mean), target, size_average=False).item()  # sum up batch loss
+            test_loss += F.nll_loss(F.log_softmax(output_mean, 0), target, reduction="sum").item()  # sum up batch loss
             pred = output_mean.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
         test_loss /= len(test_loader.dataset)
-        print('\nMC Dropout Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+        uf.box_print('MC Dropout Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             test_loss, correct, len(test_loader.dataset),
             100. * correct / len(test_loader.dataset)))
 
@@ -195,7 +196,7 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
     with torch.no_grad():
         model.train()
         rotation_list = range(0, 180, 10)
-        for data, target in test_loader:
+        for data, target in tqdm(test_loader, desc='Batching Test Data'):
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
             data, target = Variable(data), Variable(target)
@@ -213,7 +214,7 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
                 for i in range(stochastic_passes):
                     output_list.append(torch.unsqueeze(F.softmax(model(data_rotate)), 0))
                 output_mean = torch.cat(output_list, 0).mean(0)
-                output_variance = torch.cat(output_list, 0).var(0).mean().data[0]
+                output_variance = torch.cat(output_list, 0).var(0).mean().item()
                 confidence = output_mean.data.cpu().numpy().max()
                 predict = output_mean.data.cpu().numpy().argmax()
                 unct_list.append(output_variance)
@@ -232,6 +233,8 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
             print()
 
 
+# TODO: Check accuracy metric is being properly calculated as lower values of epsilon appear to decrease accuracy more than larger values. The opposite should be true.
+# TODO: May however be correct and the value of epsilon just needs to be large ~ 0.9
 def fgsm_test(model, adversary, args, test_loader):
     """
     Evaluate a standard neural network's performance when the images being evaluated have adversarial attacks inflicted upon them.
@@ -246,28 +249,28 @@ def fgsm_test(model, adversary, args, test_loader):
     test_loss = 0
     correct = 0
     # Data and target are a single pair of images and labels.
-    for data, target in test_loader:
+    for data, target in tqdm(test_loader, desc='Batching Test Data'):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data = adversary.fgsm(data, target)
         data, target = Variable(data), Variable(target)
         output = model(data)
-        test_loss += F.nll_loss(F.log_softmax(output), target, size_average=False).data[0]  # sum up batch loss
+        test_loss += F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
         pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+    uf.box_print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
 
 def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0):
-    print('Calcualting MC-Dropout Values for Adversarial Images')
+    uf.box_print('Calcualting MC-Dropout Values for Adversarial Images')
     model.train()
     passes = 100
     results = []
-    for data, target in test_loader:
+    for data, target in tqdm(test_loader, desc='Batching Test Data'):
         adv = 'No Adversary'
         rand = np.random.rand()
         if rand < epsilon:
@@ -280,7 +283,7 @@ def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0):
         for i in range(passes):
             output_list.append(torch.unsqueeze(F.softmax(model(data)), 0))
         output_mean = torch.cat(output_list, 0).mean(0)
-        output_var = torch.cat(output_list, 0).var(0).mean().data[0]
+        output_var = torch.cat(output_list, 0).var(0).mean().item()
         confidence = output_mean.data.cpu().numpy().max()
         predict = output_mean.data.cpu().numpy().argmax()
         results.append([predict, confidence, target.item(), adv])
@@ -291,30 +294,60 @@ def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0):
 class Adversary:
     def __init__(self, model, epsilon, limits = (-1, 1)):
         self.net = model
-        self.eps = epsilon
+        self.eps = 0.9
         self.lim = limits
         self.cost = nn.CrossEntropyLoss()
-        uf.box_print('Adversary Created with Epsilon = {}'.format(self.eps))
+        self.counter = 0
+        uf.box_print('Creating Adversaries with Epsilon = {}'.format(self.eps))
 
     def fgsm(self, x, y):
-        # Make prediction
-        pred = self.net(x)
+        # Initalise adversary
+        adv = x.clone()
+        adv = torch.tensor(adv.data, requires_grad=True)
+
+        # Make initial prediction
+        pred = self.net(adv)
 
         # Calculate loss value
         loss = self.cost(pred, y)
 
+        # Reset gradients
+        self.net.zero_grad()
+        if adv.grad is not None:
+            adv.grad.data.fill_(0)
+
+
         # Get gradient
         loss.backward()
 
+        # Get sign
+        adv.grad.sign_()
+
+        # Calculate perturbation
+        eta = self.eps*adv.grad
+
         # Perturb image
-        x_adv = self.eps*torch.sign(x.data)
-        return x_adv
+        eta = self.eps*torch.sign(x.data)
+        adv = adv - eta
+        adv = torch.clamp(adv, self.lim[0], self.lim[1])
+
+        # New prediction
+        original_logit = self.net(x)
+        adv_pred_logit = self.net(adv)
+        _, original = original_logit.max(-1)
+        _, adv_pred = adv_pred_logit.max(-1)
+
+        if adv_pred != original:
+            # print('{}\nOriginal: {}\nAdversary:{}'.format('-'*80, original.item(), adv_pred.item()))
+            self.counter += 1
+        return adv
 
 def main():
     args = build_parser()
     kwargs = action_args(args)
     # Setup GPU if necessary
     torch.backends.cudnn.benchmark, dtype = uf.gpu_setup(args.cuda)
+    torch.set_default_tensor_type(dtype)
 
     train_loader, test_loader = load_data(args, kwargs)
     model_standard = LeNet_standard()
@@ -331,28 +364,28 @@ def main():
         optimizer_standard = optim.SGD(model_standard.parameters(), lr=args.lr, momentum=args.momentum)
         optimizer_dropout = optim.SGD(model_dropout.parameters(), lr=args.lr, momentum=args.momentum)
 
-        print('Train standard Lenet')
+        uf.box_print('Train standard Lenet')
         start = time.time()
         for epoch in range(1, args.epochs + 1):
             train(model_standard, optimizer_standard, epoch, args, train_loader)
         end = time.time()-start
-        print('Training Time for Standard Model: {}'.format(end))
+        uf.box_print('Training Time for Standard Model: {}'.format(end))
         test(model_standard, args, test_loader)
 
-        print('Train Lenet with dropout at all layer')
+        uf.box_print('Train Lenet with dropout at all layer')
         start = time.time()
         for epoch in range(1, args.epochs + 1):
             train(model_dropout, optimizer_dropout, epoch, args, train_loader)
         end = time.time()-start
-        print('BNN Training Time: {}'.format(end))
+        uf.box_print('BCNN Training Time: {}'.format(end))
         mcdropout_test(model_dropout, args, test_loader)
 
-        print('Save checkpoint/'+'LeNet_stadard'+str(epoch)+'.pth.tar')
+        uf.box_print('Save checkpoint/'+'LeNet_stadard'+str(epoch)+'.pth.tar')
         state = {'state_dict': model_standard.state_dict()}
         filename = 'src/vision/checkpoint/'+'LeNet_stadard'+str(epoch)+'.pth.tar'
         torch.save(state, filename)
 
-        print('Save checkpoint/'+'LeNet_dropout'+str(epoch)+'.pth.tar')
+        uf.box_print('Save checkpoint/'+'LeNet_dropout'+str(epoch)+'.pth.tar')
         state = {'state_dict': model_dropout.state_dict()}
         filename = 'src/vision/checkpoint/'+'LeNet_dropout'+str(epoch)+'.pth.tar'
         torch.save(state, filename)
@@ -379,6 +412,7 @@ def main():
         model_standard.load_state_dict(ckpt_standard['state_dict'])
         adv = Adversary(model_standard, args.fgsmeps)
         fgsm_test(model_standard, adv, args, test_loader)
+        print('Total Fooled: {}'.format(adv.counter))
 
     elif args.mode == 4:
         ckpt_dropout = torch.load('src/vision/checkpoint/LeNet_dropout5.pth.tar')

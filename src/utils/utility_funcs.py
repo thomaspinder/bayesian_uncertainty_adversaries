@@ -4,7 +4,13 @@ import torch
 
 
 def box_print(msg):
-    max_len = max(78, len(msg))
+    """
+    Small helper function to print messages to console in a centralised box.
+
+    :param msg: Message to be placed in box
+    :type msg: str
+    """
+    max_len = max(78, len(msg)+10)
     print('{}'.format('-'*(max_len+2)))
     print('|{}|'.format(msg.center(max_len)))
     print('{}'.format('-'*(max_len+2)))
@@ -23,7 +29,7 @@ def experiment_parser():
     vision_parser = subparser.add_parser('vision', help='Run vision experiments.')
     vision_parser.add_argument('--task', default=0, type=int)
     vision_parser.add_argument('-m', '--mode', help='Which experiment to run: \nTraining (0) \nCNN vs. BCNN (1)'
-                                                    '\nMNIST Rotation (2) \nFGSM Adversary(3)', default=0,
+                                                    '\nMNIST Rotation (2) \nFGSM Adversary(3)', default=3,
                                type=int, choices=[0, 1, 2, 3], required=True)
     vision_parser.add_argument('-f', '--fgsmepsilon', help='Value of epsilon for crafting adversaries.',
                                type=fgsm_float, required=False, default=0.1)
@@ -96,11 +102,20 @@ class RLExperiments:
                         shell=True)
 
 
-def gpu_setup(status=True):
+def gpu_setup(status=False):
+    """
+    Configure PyTorch to run on a GPU or CPU dependent upon hardware capabilities.
+
+    :param status: Is a GPU present or not.
+    :type status: bool
+    :return: Backend status and default tensor types
+    :rtype: bool str
+    """
     if status:
         bend = True
-        dtype = torch.cuda.FloatTensor # Uncomment this to run on GPU
+        dtype = 'torch.cuda.FloatTensor' # Uncomment this to run on GPU
+        box_print('CUDA Enabled')
     else:
         bend = False
-        dtype = torch.FloatTensor
+        dtype = 'torch.FloatTensor'
     return bend, dtype
