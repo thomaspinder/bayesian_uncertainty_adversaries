@@ -1,0 +1,96 @@
+---
+title: "Result Plots"
+author: "Thomas Pinder"
+date: "18 August 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2, warn.conflicts = FALSE)
+library(reshape2)
+```
+
+# Read in Data
+```{r}
+cnn_results <- read.csv('cnn_exp3_all.csv')
+bcnn_results<- read.csv('bcnn_exp3_all.csv')
+cnn_results$method <- 'cnn'
+bcnn_results$method <- 'bcnn'
+bcnn_rbind <- bcnn_results %>% 
+  select(c('X', 'original', 'adversary', 'truth', 'epsilon', 'method'))
+
+results <- rbind(cnn_results, bcnn_rbind)
+```
+
+# Set GGPlot Theme Config
+
+```{r}
+theme_new <- theme_set(theme_bw())
+
+theme_new <- theme_update(axis.text=element_text(size=42), axis.title=element_text(size=14,face="bold"))
+```
+
+## Calculate Proportion Correct
+
+```{r}
+results_eps <- results %>% 
+  mutate(original_correct = ifelse(original == truth, 1, 0), 
+         adversary_correct = ifelse(adversary == truth, 1, 0)) %>% 
+  group_by(method, epsilon) %>% 
+  summarise(original_perc = sum(original_correct)/n(),
+            adversary_perc = sum(adversary_correct)/n()) %>% 
+  melt(id.vars=c('epsilon', 'method'))
+```
+
+### Plot
+
+```{r}
+results_eps
+p <- results_eps %>%
+  filter(variable=='adversary_perc') %>% 
+  ggplot(aes(x=epsilon, y=value, colour=method)) +
+  geom_line(size=1, alpha =0.6)+
+  geom_point(size = 3) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_discrete('Evaluation', labels=c('BCNN', 'CNN')) +
+  geom_hline(yintercept=0.1, size=2, alpha =0.8) +
+  labs(x = expression(epsilon), y= 'Accuracy (%)', colour='Evaluation', title=expression(paste('Effects of ', epsilon, ' on A Network\'s Accuracy', sep =''))) +
+  annotate("text", x= 0.6, y =0.15,label = 'Random Guessing', size=7)+
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+p 
+ggsave('plots/fgsm_acc.pdf', plot = p, width = 40, height=22, units = 'cm', dpi = 300)
+```
+
+## Assessing Uncertainty
+```{r}
+
+bcnn_results <- bcnn_results %>% 
+  mutate(result = ifelse(adversary == truth, 1, 0),
+         uncertainty_delta = adversary_confidence - original_confidence)
+
+bcnn_confs <- bcnn_results %>% 
+  group_by(result, epsilon) %>% 
+  summarise(avg_adv_conf = mean(adversary_confidence),
+            n = n(), 
+            conf_adv_se = 1.96*(sqrt(var(adversary_confidence)/n())),
+            orig_conf = mean(original_confidence),
+            orig_se = 1.96*(sqrt(var(original_confidence)/n())))
+bcnn_confs %>% 
+  melt(id.vars=c('epsilon', 'result'))
+
+ttest_res <- t.test(bcnn_results$adversary_confidence[bcnn_results$result==0], bcnn_results$adversary_confidence[bcnn_results$result==1])
+p_val <- ttest_res$p.value
+```
+
+When conducting a t-test in the difference in mean confidence between the BCNN's confidence in unperturbed vs. perturbed observations we generate a p-value of `r p_val`.
+
+### Visualise the Confidences
+
+```{r}
+
+```

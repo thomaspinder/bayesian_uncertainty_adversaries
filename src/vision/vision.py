@@ -44,7 +44,8 @@ def build_parser():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='interval of logging training status')
-    parser.add_argument('-f', '--fgsmeps', type=float, default=0.1)
+    parser.add_argument('-f', '--fgsmeps', default=0.1, type=float)
+    parser.add_argument('--model', default='cnn', choices=['cnn', 'bcnn'], type=str)
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     return args
@@ -137,10 +138,8 @@ def test(model, args, test_loader):
         for data, target in tqdm(test_loader, desc='Batching Test Data'):
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
-            output = model(data)
-            test_loss += F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
-            pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
+            pred, tloss = make_prediction(data, target)
+            test_loss += tloss
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
         test_loss /= len(test_loader.dataset)
@@ -233,9 +232,7 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
             print()
 
 
-# TODO: Check accuracy metric is being properly calculated as lower values of epsilon appear to decrease accuracy more than larger values. The opposite should be true.
-# TODO: May however be correct and the value of epsilon just needs to be large ~ 0.9
-def fgsm_test(model, adversary, args, test_loader):
+def fgsm_test(model, adversary, args, test_loader, data_name='MNIST', model_name ='cnn'):
     """
     Evaluate a standard neural network's performance when the images being evaluated have adversarial attacks inflicted upon them.
 
@@ -244,57 +241,107 @@ def fgsm_test(model, adversary, args, test_loader):
     :param adversary: An adversarial object for which attacks can be crafted
     :param args: Arguments object
     :param test_loader: Testing dataset
+    :param data_name: The name of dataset being experimented upon. Not critical, only used for file naming
+    :type data_name: str
     """
     model.eval()
     test_loss = 0
     correct = 0
     # Data and target are a single pair of images and labels.
+    results = []
     for data, target in tqdm(test_loader, desc='Batching Test Data'):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        data = adversary.fgsm(data, target)
-        data, target = Variable(data), Variable(target)
-        output = model(data)
-        test_loss += F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
-        pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
-        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+        # Original Prediction
+        original_pred, tloss = make_prediction(data, target, model)
+        test_loss += tloss
 
-    test_loss /= len(test_loader.dataset)
-    uf.box_print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+        # Make Adversary Prediction
+        adv_data = adversary.fgsm(data, target)
+        adv_pred, _ = make_prediction(adv_data, target, model)
+        correct += adv_pred.eq(target.data.view_as(adv_pred)).cpu().sum()
+        results.append([original_pred.item(), adv_pred.item(), target.item()])
+    results_df = pd.DataFrame(results, columns=['Original Prediction', 'Adversary Prediction', 'Truth'])
+    results_df['epsilon'] = adversary.eps
+    results_df.to_csv('results/experiment3/{}/{}_fgsm_{}_{}.csv'.format(model_name, model_name, adversary.eps,
+                                                                        data_name), index=False)
 
 
-def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0):
+def make_prediction(data, target, model):
+    data, target = Variable(data), Variable(target)
+    output = model(data)
+    loss_val = F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
+    pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
+    return pred, loss_val
+
+
+def mc_make_prediction(data, target, model, passes):
+    output_list = []
+    for i in range(passes):
+        output_list.append(torch.unsqueeze(F.softmax(model(data)), 0))
+    output_mean = torch.cat(output_list, 0).mean(0)
+    output_var = torch.cat(output_list, 0).var(0).mean().item()
+    confidence = output_mean.data.cpu().numpy().max()
+    predict = output_mean.data.cpu().numpy().argmax()
+    return predict, output_var
+
+def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0, model_name='bcnn', data_name = 'MNIST'):
+    """
+    Test a BCNN against adversaries. Through the epsilon parameter here (not to be confused with the epsilon parameter used in FGSM), the proportion of images perturbed can be tested so as to compare uncertainty values calculated from original and perturbed images.
+
+    :param model: A BCNN
+    :type model: Torch Model
+    :param adversary: Adversary object capable of perturbing images
+    :type adversary: Adversary Object
+    :param args: User defined arguments to control testing parameters
+    :type args: Argparser object
+    :param test_loader: Set of test data to be experimented upon
+    :type test_loader: Torch DataLoader
+    :param epsilon: Value between 0 and 1 to control the proportion of images perturbed. Epsilon = 1 implies that every image is perturbed.
+    :type epsilon: float
+    """
     uf.box_print('Calcualting MC-Dropout Values for Adversarial Images')
     model.train()
     passes = 100
     results = []
     for data, target in tqdm(test_loader, desc='Batching Test Data'):
-        adv = 'No Adversary'
-        rand = np.random.rand()
-        if rand < epsilon:
+        if epsilon >= 1.0:
+            orig_pred, orig_conf = mc_make_prediction(data, target, model, passes)
+
+            # Perturb image
             data = adversary.fgsm(data, target)
-            adv = 'Adversary'
-        if args.cuda:
-            data, target = data.cuda(), target.cuda()
-        data, target = Variable(data), Variable(target)
-        output_list = []
-        for i in range(passes):
-            output_list.append(torch.unsqueeze(F.softmax(model(data)), 0))
-        output_mean = torch.cat(output_list, 0).mean(0)
-        output_var = torch.cat(output_list, 0).var(0).mean().item()
-        confidence = output_mean.data.cpu().numpy().max()
-        predict = output_mean.data.cpu().numpy().argmax()
-        results.append([predict, confidence, target.item(), adv])
-    results_df = pd.DataFrame(results, columns=['prediction', 'confidence', 'truth', 'adv_status'])
-    results_df.to_csv('results/fgsm_{}_bnn.csv'.format(epsilon), index=False)
+
+            # Make prediction on perturbed image
+            adv_pred, adv_conf = mc_make_prediction(data, target, model, passes)
+            results.append([int(orig_pred), orig_conf, int(adv_pred), adv_conf, target.item()])
+            results_df = pd.DataFrame(results, columns=['Original Prediction', 'Original Confidence', 'Adversary Prediction','Adversary Confidence', 'Truth'])
+            results_df.epsilon = adversary.eps
+            results_df.to_csv('results/experiment3/{}/{}_fgsm_{}_{}.csv'.format(model_name, model_name, adversary.eps, data_name))
+        else:
+            adv = 'No Adversary'
+            rand = np.random.rand()
+            if rand < epsilon:
+                data = adversary.fgsm(data, target)
+                adv = 'Adversary'
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+            output_list = []
+            for i in range(passes):
+                output_list.append(torch.unsqueeze(F.softmax(model(data)), 0))
+            output_mean = torch.cat(output_list, 0).mean(0)
+            output_var = torch.cat(output_list, 0).var(0).mean().item()
+            confidence = output_mean.data.cpu().numpy().max()
+            predict = output_mean.data.cpu().numpy().argmax()
+            results.append([predict.item(), confidence.item(), target.item(), adv])
+            results_df = pd.DataFrame(results, columns=['prediction', 'confidence', 'truth', 'adv_status'])
+            results_df.to_csv('results/fgsm_{}_bnn.csv'.format(epsilon), index=False)
 
 
 class Adversary:
     def __init__(self, model, epsilon, limits = (-1, 1)):
         self.net = model
-        self.eps = 0.9
+        self.eps = epsilon
         self.lim = limits
         self.cost = nn.CrossEntropyLoss()
         self.counter = 0
@@ -408,11 +455,20 @@ def main():
 
     # Test models on adversarial images
     elif args.mode == 3:
-        ckpt_standard = torch.load('src/vision/checkpoint/LeNet_stadard5.pth.tar')
-        model_standard.load_state_dict(ckpt_standard['state_dict'])
-        adv = Adversary(model_standard, args.fgsmeps)
-        fgsm_test(model_standard, adv, args, test_loader)
-        print('Total Fooled: {}'.format(adv.counter))
+        if args.model == 'cnn':
+            uf.box_print('Testing Standard CNN')
+            ckpt_standard = torch.load('src/vision/checkpoint/LeNet_stadard20.pth.tar')
+            model_standard.load_state_dict(ckpt_standard['state_dict'])
+            adv = Adversary(model_standard, args.fgsmeps)
+            fgsm_test(model_standard, adv, args, test_loader, model_name=args.model)
+            print('Total Fooled: {}'.format(adv.counter))
+        elif args.model == 'bcnn':
+            uf.box_print('Testing Bayesian CNN')
+            ckpt_dropout = torch.load('src/vision/checkpoint/LeNet_dropout20.pth.tar')
+            model_dropout.load_state_dict(ckpt_dropout['state_dict'])
+            adv = Adversary(model_dropout, args.fgsmeps)
+            fgsm_test_mc(model_dropout, adv, args, test_loader, epsilon=1.0, model_name=args.model, data_name='MNIST')
+            print('Total Fooled: {}'.format(adv.counter))
 
     elif args.mode == 4:
         ckpt_dropout = torch.load('src/vision/checkpoint/LeNet_dropout5.pth.tar')

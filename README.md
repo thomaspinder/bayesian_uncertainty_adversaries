@@ -92,5 +92,29 @@ python -m src.experiments 'vision' -m 1
 python -m src.experiments 'vision' -m 0
 ```
 
+3. Test the accuracy of a CNN or BCNN on adversarially perturbed images
+```
+python -m src.experiments 'vision' -m 3 -f <EPSILON-VALUE> --model <CNN-OR-BCNN>
+```
+
+replacing `<EPSILON-VALUE>` with the value of ![equation](http://latex.codecogs.com/gif.latex?%5Cepsilon) to be used in FGSM.
+
+Alternatively, you may find it convenient to use the shell command `sh fgsm_loop.sh` to test all values of epsilon between 0.01 and 2 for both a CNN and BCNN with one simple command.
 
 ### Reinforcement Learning Tasks
+
+
+### Other
+
+Experiments will typically generate one `.csv` file per run. When testing multiple parameter configurations this can be cumbersome so the following command will collect results together and merge into a single `.csv`.
+
+```
+python -m src.utils.plotting_helpers -f True -d <FOLDER-CONTAINING-RESULTS> -o <FOLDER-TO-SAVE-TO/FILENAME.csv>
+```
+
+An example for the FGSM experiments with varying values of ![equation](http://latex.codecogs.com/gif.latex?%5Cepsilon) is: 
+
+```
+python -m src.utils.plotting_helpers -f True -d 'results/experiment3/cnn' -o 'results/cnn_exp3_all.csv'
+```
+python -m src.utils.plotting_helpers -f True -d 'results/experiment3/bcnn' -o 'results/bcnn_exp3_all.csv' --forgot True -t 'bcnn'

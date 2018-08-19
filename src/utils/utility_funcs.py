@@ -36,7 +36,8 @@ def experiment_parser():
     vision_parser.add_argument('-e', '--epochs', help='Number of epochs to train the CNN and BCNN for.', type=int,
                                required=False, default=20)
     vision_parser.add_argument('-s', '--seed', help='Seed for reproducibility', type=int, required=False, default=123)
-
+    vision_parser.add_argument('--model', help='Standard CNN or Bayesian CNN, if applicable.', type=str, default='cnn',
+                               choices=['cnn', 'bcnn'])
     # Create RL parser
     rl_parser = subparser.add_parser('rl', help='Run Reinforcement Learning experiments.')
 
@@ -61,8 +62,8 @@ def fgsm_float(x):
     :rtype: float
     """
     x = float(x)
-    if x < 0.0 or x > 1.0:
-        raise argparse.ArgumentTypeError("%r not in range [0.0, 1.0]"%(x,))
+    if x < 0.0 or x > 2:
+        raise argparse.ArgumentTypeError("%r not in range [0.0, 2]"%(x,))
     return x
 
 
@@ -80,7 +81,9 @@ class VisionExperiments:
 
         :return: Terminal command to run experiments.
         """
-        subprocess.call('python -m src.vision.vision --mode {} --fgsmeps {}'.format(self.args.mode, self.args.fgsmepsilon),
+        subprocess.call('python -m src.vision.vision --mode {} --fgsmeps {} --model {}'.format(self.args.mode,
+                                                                                               self.args.fgsmepsilon,
+                                                                                               self.args.model),
                         shell=True)
 
 
