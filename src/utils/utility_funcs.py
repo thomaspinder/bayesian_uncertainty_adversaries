@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 import torch
+from torchvision import datasets, transforms
 
 
 def box_print(msg):
@@ -122,3 +123,71 @@ def gpu_setup(status=False):
         bend = False
         dtype = 'torch.FloatTensor'
     return bend, dtype
+
+
+def load_data(args, kwargs):
+    """
+    Load in the MNIST dataset are setup batching.
+
+    :param args: Argparser object
+    :param kwargs: GPU specific kwargs
+    :return: Train and Test datasets
+    """
+    train_loader = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=True, download=True,
+                       transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
+        batch_size=args.batch_size, shuffle=True, **kwargs)
+    test_loader = torch.utils.data.DataLoader(
+        datasets.MNIST('../data', train=False, transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])),
+        batch_size=args.test_batch_size, shuffle=True, **kwargs)
+    return train_loader, test_loader
+
+
+def vision_parser():
+    """
+    Setup parser.
+    """
+    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser.add_argument('--mode', type=int, default=0, metavar='N',
+                        help='train mode (0) test mode (1)'
+                        'uncertainty test mode (2) (default: 0)')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 64)')
+    parser.add_argument('--test-batch-size', type=int, default=1, metavar='N',
+                        help='input batch size for testing (default: 1000)')
+    parser.add_argument('--epochs', type=int, default=20, metavar='N',
+                        help='number of epochs to train (default: 10)')
+    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+                        help='learning rate (default: 0.01)')
+    parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
+                        help='SGD momentum (default: 0.5)')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                        help='disables CUDA training')
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
+    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                        help='interval of logging training status')
+    parser.add_argument('-f', '--fgsmeps', default=0.1, type=float)
+    parser.add_argument('--model', default='cnn', choices=['cnn', 'bcnn'], type=str)
+    args = parser.parse_args()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    return args
+
+
+def action_args(args):
+    """
+    Make GPU specific changes based upon the system's setup and the user's arguments.
+    :param args: Argparser containing desired arguments.
+    :return: Set of kwargs.
+    """
+    torch.manual_seed(args.seed)
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
+    kwargs = {'num_workers': 4, 'pin_memory': True} if args.cuda else {}
+    return kwargs

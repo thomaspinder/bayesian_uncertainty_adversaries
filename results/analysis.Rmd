@@ -47,7 +47,6 @@ results_eps <- results %>%
 ### Plot
 
 ```{r}
-results_eps
 p <- results_eps %>%
   filter(variable=='adversary_perc') %>% 
   ggplot(aes(x=epsilon, y=value, colour=method)) +
@@ -84,10 +83,105 @@ bcnn_confs %>%
   melt(id.vars=c('epsilon', 'result'))
 
 ttest_res <- t.test(bcnn_results$adversary_confidence[bcnn_results$result==0], bcnn_results$adversary_confidence[bcnn_results$result==1])
+ttest_adv <- t.test(bcnn_results$adversary_confidence, bcnn_results$original_confidence)
 p_val <- ttest_res$p.value
 ```
 
 When conducting a t-test in the difference in mean confidence between the BCNN's confidence in unperturbed vs. perturbed observations we generate a p-value of `r p_val`.
+
+## Bayesian Significance
+We can compute the Bayesian equivalent of this p-value through the following
+
+### Visualise data distributions
+```{r}
+set.seed(123)
+adv_conf <- sample(bcnn_results$adversary_confidence, size = 1000, replace = FALSE)
+original_conf <- sample(bcnn_results$original_confidence, size=1000, replace = FALSE)
+pooled <- c(adv_conf, original_conf)
+
+# Visaulise
+bcnn_hist <-bcnn_results %>% 
+  select(c(method, adversary_confidence, original_confidence)) %>% 
+  melt(id.vars='method') %>% 
+  ggplot(aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.7) +
+  scale_fill_discrete('Image Type', labels=c('Adversarial Example', 'Original')) +
+  facet_wrap(~variable) +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+
+# Save
+ggsave('plots/bcnn_uncertainties_hist.pdf', plot = bcnn_hist, width = 50, height=22, units = 'cm', dpi = 300)
+```
+
+### Specify priors and likelihoods
+
+```{r}
+likelihood <- function(parameters){
+  mu1=parameters[1]; sig1=parameters[2]; mu2=parameters[3]; sig2=parameters[4]
+  prod(dnorm(adv_conf, mu1, sig1)) * prod(dnorm(original_conf, mu2, sig2))
+}
+
+prior <- function(parameters){
+  mu1=parameters[1]; sig1=parameters[2]; mu2=parameters[3]; sig2=parameters[4]
+  dnorm(mu1, mean(pooled), 1000*sd(pooled)) * dnorm(mu2, mean(pooled), 1000*sd(pooled)) * dexp(sig1, rate=0.1) * dexp(sig2, 0.1)
+}
+```
+
+### And the Posterior
+
+```{r}
+posterior <- function(parameters) {likelihood(parameters) * prior(parameters)}
+```
+
+### Use MH to get our Posterior
+#### Define Our Model
+```{r}
+cat("model {
+    for (i in 1:Ntotal) {
+        y[i] ~ dt(mu[x[i]], tau[x[i]], nu)
+    }
+    for (j in 1:2) {
+        mu[j] ~ dnorm(mu_pooled, tau_pooled)
+        tau[j] <- 1 / pow(sigma[j], 2)
+        sigma[j] ~ dunif(sigma_low, sigma_high)
+    }
+    nu <- nu_minus_one + 1
+    nu_minus_one ~ dexp(1 / 29)
+}", file = 'mhastings.txt')
+
+```
+
+```{r}
+library(rjags)
+library(coda)
+mu1 = 0.01; sig1 = 10; mu2 = 0.01; sig2 = 10
+parameters <- c(mu1, sig1, mu2, sig2)
+
+
+# Indicator variable
+x <- c(rep(1, length(adv_conf)), rep(2, length(original_conf)))
+
+# Initialise model
+cpd.model <- jags.model(file='mhastings.txt',
+                        data=list(y=pooled,
+                                  x=x,
+                                  mu_pooled=mean(pooled),
+                                  tau_pooled=1/(1000 * sd(pooled))^2,
+                                  sigma_low=sd(pooled) / 1000,
+                                  sigma_high=sd(pooled) * 1000,
+                                  Ntotal=length(pooled)))
+# Run
+update(cpd.model, 1000)
+chain <- coda.samples(model = cpd.model, n.iter = 10000,
+                      variable.names = c('mu', 'sigma'))
+plot(chain)
+rchain <- as.matrix(chain)
+hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
+mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
+```
 
 ### Visualise the Confidences
 

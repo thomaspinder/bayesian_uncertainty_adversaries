@@ -1,0 +1,12 @@
+model.str <- 'model {
+    for (i in 1:Ntotal) {
+        y[i] ~ dt(mu[x[i]], tau[x[i]], nu)
+    }
+    for (j in 1:2) {
+        mu[j] ~ dnorm(mu_pooled, tau_pooled)
+        tau[j] <- 1 / pow(sigma[j], 2)
+        sigma[j] ~ dunif(sigma_low, sigma_high)
+    }
+    nu <- nu_minus_one + 1
+    nu_minus_one ~ dexp(1 / 29)
+}'
