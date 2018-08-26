@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr, warn.conflicts = FALSE)
 library(ggplot2, warn.conflicts = FALSE)
 library(reshape2)
+library(knitr)
 ```
 
 # Read in Data
@@ -175,7 +176,7 @@ cpd.model <- jags.model(file='mhastings.txt',
                                   Ntotal=length(pooled)))
 # Run
 update(cpd.model, 1000)
-chain <- coda.samples(model = cpd.model, n.iter = 10000,
+chain <- coda.samples(model = cpd.model, n.iter = 50000,
                       variable.names = c('mu', 'sigma'))
 plot(chain)
 rchain <- as.matrix(chain)
@@ -183,8 +184,32 @@ hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
 mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
 ```
 
-### Visualise the Confidences
+# X-Ray Results
 
+### Load in Data
 ```{r}
+xray <- read.csv('xray_mc.csv')
+kable(head(xray))
+xray <- xray %>% 
+  mutate(standard_correct = ifelse(standard_pred==truth, 1,0),
+         mc_correct = ifelse(mc_pred==truth, 1, 0))
+mc_acc = round((sum(xray$mc_correct)/dim(xray)[1])*100, 2)
+st_acc = round((sum(xray$standard_correct)/dim(xray)[1])*100, 2)
+```
 
+
+### Test Recall and Precision 
+#### Mone Carlo CNN
+```{r}
+library(e1071)
+library(caret)
+mc_c_matrix <- confusionMatrix(as.factor(xray$mc_pred), reference = as.factor(xray$truth))
+kable(mc_c_matrix$table)
+```
+#### Standard CNN
+```{r}
+library(e1071)
+library(caret)
+s_c_matrix <- confusionMatrix(as.factor(xray$standard_pred), reference = as.factor(xray$truth))
+kable(s_c_matrix$table)
 ```

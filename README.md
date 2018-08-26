@@ -101,6 +101,22 @@ replacing `<EPSILON-VALUE>` with the value of ![equation](http://latex.codecogs.
 
 Alternatively, you may find it convenient to use the shell command `sh fgsm_loop.sh` to test all values of epsilon between 0.01 and 2 for both a CNN and BCNN with one simple command.
 
+4. To test the performance of a BCNN on the real world x-ray dataset for unperturbed images and images perturbed by FGSM for values of epsilon between 0.01 and 0.9 run
+
+```
+sh fgsm_xray.sh
+```
+
+Alternatively, to test specific configuration of epsilon run
+
+```
+python -m src.vision.mc_dropout_keras -m 0 -a True -e 0.1
+```
+where `-m` denotes if monte carlo dropout should be used, 0 indicates no test, 1 for standard cnn and 2 for bcnn based monte carlo dropout.
+`-a` is a bool operator for if adversaries should be induces
+`-e` is the value of epsilon to be used in FGSM 
+`-t` is a bool operator denoting if the network should be trained from scratch. Default is false, indicating that weights will be loaded.
+
 ### Reinforcement Learning Tasks
 
 
@@ -117,4 +133,4 @@ An example for the FGSM experiments with varying values of ![equation](http://la
 ```
 python -m src.utils.plotting_helpers -f True -d 'results/experiment3/cnn' -o 'results/cnn_exp3_all.csv'
 ```
-python -m src.utils.plotting_helpers -f True -d 'results/experiment3/bcnn' -o 'results/bcnn_exp3_all.csv' --forgot True -t 'bcnn'
+

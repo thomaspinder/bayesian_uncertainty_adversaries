@@ -2,3 +2,5 @@ __pycache__/*
 .idea/*
 .pytest_cache/*
 src/vision/__pycache__/tests.cpython-36.pyc
+data/*
+*.h5
