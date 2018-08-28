@@ -80,8 +80,7 @@ bcnn_confs <- bcnn_results %>%
             conf_adv_se = 1.96*(sqrt(var(adversary_confidence)/n())),
             orig_conf = mean(original_confidence),
             orig_se = 1.96*(sqrt(var(original_confidence)/n())))
-bcnn_confs %>% 
-  melt(id.vars=c('epsilon', 'result'))
+
 
 ttest_res <- t.test(bcnn_results$adversary_confidence[bcnn_results$result==0], bcnn_results$adversary_confidence[bcnn_results$result==1])
 ttest_adv <- t.test(bcnn_results$adversary_confidence, bcnn_results$original_confidence)
