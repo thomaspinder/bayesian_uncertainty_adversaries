@@ -3,6 +3,9 @@ import torch.nn.functional as F
 
 
 class LeNet_standard(nn.Module):
+    """
+    Standard LeNet architecture model.
+    """
     def __init__(self):
         super(LeNet_standard, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
@@ -11,6 +14,12 @@ class LeNet_standard(nn.Module):
         self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
+        """
+        Make a forward pass through the network.
+
+        :param x: Observation or batch for which the network should be passed over.
+        :return: Prediction as a softmax distribution over a single image or an image in the batch.
+        """
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
         x = x.view(-1, 320)
@@ -21,6 +30,9 @@ class LeNet_standard(nn.Module):
 
 
 class LeNet_dropout(nn.Module):
+    """
+    Customised LeNet architecture with dropout incorporated into each layer of the network. This dropout is kept on at test time, thus ensuring the convergence to a GP.
+    """
     def __init__(self):
         super(LeNet_dropout, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
@@ -29,6 +41,12 @@ class LeNet_dropout(nn.Module):
         self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
+        """
+        Make a forward pass through the network.
+
+        :param x: Observation or batch for which the network should be passed over.
+        :return: Prediction as a softmax distribution over a single image or an image in the batch.
+        """
         x = F.relu(F.max_pool2d(F.dropout(self.conv1(x), training=True), 2))
         x = F.relu(F.max_pool2d(F.dropout(self.conv2(x), training=True), 2))
         x = x.view(-1, 320)
