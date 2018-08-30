@@ -77,7 +77,7 @@ def test(model, args, test_loader):
             100. * correct / len(test_loader.dataset)))
 
 
-def main():
+if __name__ == '__main__':
     args = vision_parser()
     kwargs = action_args(args)
     # Setup GPU if necessary
@@ -103,7 +103,7 @@ def main():
         start = time.time()
         for epoch in range(1, args.epochs + 1):
             train(model_standard, optimizer_standard, epoch, args, train_loader)
-        end = time.time()-start
+        end = time.time() - start
         uf.box_print('Training Time for Standard Model: {}'.format(end))
         test(model_standard, args, test_loader)
 
@@ -111,18 +111,18 @@ def main():
         start = time.time()
         for epoch in range(1, args.epochs + 1):
             train(model_dropout, optimizer_dropout, epoch, args, train_loader)
-        end = time.time()-start
+        end = time.time() - start
         uf.box_print('BCNN Training Time: {}'.format(end))
         mcdropout_test(model_dropout, args, test_loader)
 
-        uf.box_print('Save checkpoint/'+'LeNet_stadard'+str(epoch)+'.pth.tar')
+        uf.box_print('Save checkpoint/' + 'LeNet_stadard' + str(epoch) + '.pth.tar')
         state = {'state_dict': model_standard.state_dict()}
-        filename = 'src/vision/checkpoint/'+'LeNet_stadard'+str(epoch)+'.pth.tar'
+        filename = 'src/vision/checkpoint/' + 'LeNet_stadard' + str(epoch) + '.pth.tar'
         torch.save(state, filename)
 
-        uf.box_print('Save checkpoint/'+'LeNet_dropout'+str(epoch)+'.pth.tar')
+        uf.box_print('Save checkpoint/' + 'LeNet_dropout' + str(epoch) + '.pth.tar')
         state = {'state_dict': model_dropout.state_dict()}
-        filename = 'src/vision/checkpoint/'+'LeNet_dropout'+str(epoch)+'.pth.tar'
+        filename = 'src/vision/checkpoint/' + 'LeNet_dropout' + str(epoch) + '.pth.tar'
         torch.save(state, filename)
 
     # Test models on clean MNIST dataset
@@ -166,7 +166,3 @@ def main():
 
     else:
         print('--mode argument is invalid \ntrain mode (0) or test mode (1) uncertainty test mode (2)')
-
-
-if __name__ == '__main__':
-    main()

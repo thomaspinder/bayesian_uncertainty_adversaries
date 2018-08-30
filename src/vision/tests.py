@@ -40,6 +40,14 @@ def fgsm_test(model, adversary, args, test_loader, data_name='MNIST', model_name
 
 
 def make_prediction(data, target, model):
+    """
+    Make a single prediction for a pair of observations and labels.
+
+    :param data: The input features
+    :param target: The output labels
+    :param model: Model to test
+    :return: A prediction and the corresponding loss incurred from the respective prediction
+    """
     data, target = Variable(data), Variable(target)
     output = model(data)
     loss_val = F.nll_loss(F.log_softmax(output, 0), target, reduction="sum").item()  # sum up batch loss
