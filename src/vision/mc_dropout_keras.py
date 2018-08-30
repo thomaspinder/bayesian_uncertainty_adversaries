@@ -34,7 +34,7 @@ def build_parser():
                         help='(0) - no testing, (1) - test on standard cnn, (2) - test on bcnn.')
     parser.add_argument('-a', '--adversary', type=bool, default=False)
     parser.add_argument('-e', '--epsilon', type=float, default=0.1)
-    parser.add_argument('-o', '--observations', type=int, default=300, help='Number of observations to be used in testing.')
+    parser.add_argument('-s', '--small', type=bool, default=False, help='Should the smaller test set be used?')
     args = parser.parse_args()
     return args
 
@@ -57,12 +57,16 @@ def lenet_all(input_shape=(224, 224, 1), num_classes=2):
     x = Dense(num_classes, activation='softmax')(x)
     return Model(inp, x, name='lenet-all')
 
-def get_data(data_dir='data/chest_xray/'):
+def get_data(data_dir='data/chest_xray/', small=False):
     gen = ImageDataGenerator()
     train_batches = gen.flow_from_directory("{}train".format(data_dir), (224, 224), color_mode="grayscale", shuffle=True,
                                             seed=1, batch_size=8)
-    test_batches = gen.flow_from_directory("{}test".format(data_dir), (224, 224), shuffle=False, color_mode="grayscale",
-                                           batch_size=1, class_mode='binary')
+    if small:
+        test_batches = gen.flow_from_directory("{}testSmall".format(data_dir), (224, 224), shuffle=False,
+                                               color_mode="grayscale", batch_size=1, class_mode='binary')
+    else:
+        test_batches = gen.flow_from_directory("{}test".format(data_dir), (224, 224), shuffle=False,
+                                               color_mode="grayscale", batch_size=1, class_mode='binary')
     return train_batches, test_batches
 
 
@@ -95,10 +99,9 @@ def mc_dropout(model, test_data, stochastic_passes):
     return results_df
 
 
-def mc_adversary(model, test_data, stochastic_passes, session, epsilon, obs_counts):
-    test_obs = np.min((obs_counts, test_data.n))
+def mc_adversary(model, test_data, stochastic_passes, session, epsilon):
     results = []
-    for _ in tqdm(range(test_obs), desc='Batching Data'):
+    for _ in tqdm(range(test_data.n), desc='Batching Data'):
         data, label = test_data.next()
         # Make non-mc prediction
         normal_prediction = np.argmax(model.predict(data))
@@ -141,7 +144,7 @@ if __name__=='__main__':
     args = build_parser()
 
     # Load Data
-    train, test = get_data()
+    train, test = get_data(small=args.small)
     if args.train:
         uf.box_print('Training Model')
 
@@ -163,7 +166,7 @@ if __name__=='__main__':
         model = load_model('src/vision/checkpoint/best_model.h5')
 
     if args.adversary:
-        uf.box_print('Crafting {} Adversaries with epsilon = {}'.format(args.observations, args.epsilon))
+        uf.box_print('Crafting {} Adversaries with epsilon = {}'.format(test.n, args.epsilon))
         # Retrieve the tensorflow session
         sess = backend.get_session()
 
@@ -171,7 +174,7 @@ if __name__=='__main__':
         x = tf.placeholder(tf.float32, shape=(None, 224, 224, 1))
         y = tf.placeholder(tf.float32, shape=(None, 2))
 
-        adv_results = mc_adversary(model, test, 100, sess, args.epsilon, args.observations)
+        adv_results = mc_adversary(model, test, 100, sess, args.epsilon)
         adv_results.to_csv('results/xray_adv/xray_mc_adv_{}.csv'.format(args.epsilon), index=False)
 
     if args.monte==2:

@@ -69,6 +69,6 @@ burnIn = 1000
 acceptance = 1-mean(duplicated(chain[-(1:burnIn),]))
 
 par(mfrow=c(1,3))
-plot(chain_good[-(1:burnIn),1], type = "l", xlab="Sample Index" , main = "Chain Values With Suitable Variance", ylab = 'Parameter Value')
-plot(chain_small[-(1:burnIn),1], type = "l", lwd=1.5, xlab="Sample Index" , main = "Chain Values With Variance Too Small", ylab = 'Parameter Value')
-plot(chain_large[-(1:burnIn),1], type = "l", lwd =1.5, xlab="Sample Index" , main = "Chain Values With Variance Too Large", ylab = 'Parameter Value')
+plot(chain_good[-(1:burnIn),1], type = "l", xlab="Sample Index" , main = "Chain Values With Suitable Variance", ylab = 'Parameter Value', cex.main=2.5, cex.axis=2.5, cex.lab=2.5)
+plot(chain_small[-(1:burnIn),1], type = "l", lwd=1.5, xlab="Sample Index" , main = "Chain Values With Variance Too Small", ylab = 'Parameter Value', cex.main=2.5, cex.axis=2.5, cex.lab=2.5)
+plot(chain_large[-(1:burnIn),1], type = "l", lwd =1.5, xlab="Sample Index" , main = "Chain Values With Variance Too Large", ylab = 'Parameter Value', cex.main=2.5, cex.axis=2.5, cex.lab=2.5)
