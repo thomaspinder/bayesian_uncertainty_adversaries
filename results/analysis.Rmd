@@ -11,6 +11,8 @@ library(dplyr, warn.conflicts = FALSE)
 library(ggplot2, warn.conflicts = FALSE)
 library(reshape2)
 library(knitr)
+library(purrr)
+library(readr)
 ```
 
 # Read in Data
@@ -212,3 +214,61 @@ library(caret)
 s_c_matrix <- confusionMatrix(as.factor(xray$standard_pred), reference = as.factor(xray$truth))
 kable(s_c_matrix$table)
 ```
+
+## X-Ray Adversaries
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Merge files
+all_files <- list.files('xray_adv', pattern = '*.csv', full.names = TRUE)
+xray_advs <- map_df(all_files, read_csv, .id='id')
+# kable(head(xray_advs))
+```
+## Calculate Performance
+```{r}
+xray_advs <- xray_advs %>% 
+  mutate(orig_correct = ifelse(standard_pred==truth, 1, 0),
+         mc_correct = ifelse(mc_pred==truth, 1, 0), 
+         orig_adv_correct = ifelse(cnn_adv==truth, 1, 0),
+         mc_adv_correct = ifelse(mc_adv==truth, 1, 0),
+         mc_fooled = ifelse(mc_correct==1 && mc_adv_correct==1, 1, 0))
+
+xray_advs %>% 
+  select(c(orig_adv_correct, mc_adv_correct, epsilon)) %>%
+  filter(epsilon < 0.1) %>% 
+  melt(id.vars='epsilon') %>% 
+  group_by(epsilon, variable) %>% 
+  summarise(acc = sum(value)/n()) %>% 
+  ggplot(aes(x = epsilon, y=acc, colour=variable)) +
+  geom_hline(yintercept=0.5, size=2, alpha =0.8) +
+  annotate("text", x= 0.6, y =0.15,label = 'Random Guessing', size=7)+
+  geom_line()+
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(breaks = seq(0,1, 0.1)) +
+  scale_colour_discrete('Evaluation', labels=c('CNN', 'BCNN')) +
+  labs(x = expression(epsilon), y= 'Accuracy (%)', colour='Evaluation', title=expression(paste('Effects of ', epsilon, ' on A Network\'s Accuracy Predicting Pneumonia', sep =''))) +
+  geom_point() +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=32),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+```
+
+
+
+### Recall and Precision
+```{r}
+library(caret)
+
+confusionMatrix(as.factor(xray_advs$mc_adv), as.factor(xray_advs$truth))
+```
+### Average Confidence
+
+```{r}
+xray_advs %>% 
+  group_by(mc_correct) %>% 
+  summarise(avg_conf = mean(mc_conf_1))
+
+xray_advs %>% 
+  select(c(mc_correct, mc_conf)) %>% 
+  ggplot(aes(x=mc_conf, colour=as.factor(mc_correct))) +
+           geom_density(bw=0.06)
+```
+

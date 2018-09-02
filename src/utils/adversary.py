@@ -29,12 +29,14 @@ class Adversary:
         if adv.grad is not None:
             adv.grad.data.fill_(0)
 
-
         # Get gradient
         loss.backward()
 
         # Get sign
         adv.grad.sign_()
+
+        # TODO: Check for differences
+        adv_sign = torch.sign(adv.grad.data)
 
         # Calculate perturbation
         eta = self.eps*adv.grad
