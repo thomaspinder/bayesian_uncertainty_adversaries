@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 import pandas as pd
 import torch
@@ -7,7 +6,6 @@ from matplotlib import pyplot as plt
 from torch.autograd import Variable
 from torch.nn import functional as F
 from tqdm import tqdm
-
 from src.utils import utility_funcs as uf
 
 
@@ -41,12 +39,12 @@ def fgsm_test_mc(model, adversary, args, test_loader, epsilon=1.0, model_name='b
     model.train()
     passes = 100
     results = []
-    for data, target in tqdm(test_loader, desc='Batching Test Data'):
+    for i, (data, target) in enumerate(tqdm(test_loader, desc='Batching Test Data')):
         if epsilon >= 1.0:
             orig_pred, orig_conf = mc_make_prediction(data, target, model, passes)
 
             # Perturb image
-            data = adversary.fgsm(data, target)
+            data = adversary.fgsm(data, target, i)
 
             # Make prediction on perturbed image
             adv_pred, adv_conf = mc_make_prediction(data, target, model, passes)
@@ -121,39 +119,72 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
     """
     with torch.no_grad():
         model.train()
-        rotation_list = range(0, 180, 10)
-        for data, target in tqdm(test_loader, desc='Batching Test Data'):
-            if args.cuda:
-                data, target = data.cuda(), target.cuda()
-            data, target = Variable(data), Variable(target)
-            output_list = []
-            image_list = []
-            unct_list = []
-            for r in rotation_list:
-                rotation_matrix = Variable(
-                    torch.Tensor([[[math.cos(r / 360.0 * 2 * math.pi), -math.sin(r / 360.0 * 2 * math.pi), 0],
-                                   [math.sin(r / 360.0 * 2 * math.pi), math.cos(r / 360.0 * 2 * math.pi), 0]]]))
-                grid = F.affine_grid(rotation_matrix, data.size())
-                data_rotate = F.grid_sample(data, grid)
-                image_list.append(data_rotate)
+        rotation_list = range(0, 180, 15)
+        labels = []
+        while len(labels) < 10:
+            for data, target in tqdm(test_loader, desc='Batching Test Data'):
+                if args.cuda:
+                    data, target = data.cuda(), target.cuda()
+                data, target = Variable(data), Variable(target)
+                if target.item() not in labels:
+                    mc_preds = []
+                    mc_unc = []
+                    cnn_pred = []
+                    cnn_soft = []
+                    labels.append(target.item())
+                    output_list = []
+                    image_list = []
+                    unct_list = []
+                    for r in rotation_list:
+                        rotation_matrix = Variable(
+                            torch.Tensor([[[math.cos(r / 360.0 * 2 * math.pi), -math.sin(r / 360.0 * 2 * math.pi), 0],
+                                           [math.sin(r / 360.0 * 2 * math.pi), math.cos(r / 360.0 * 2 * math.pi), 0]]]))
+                        grid = F.affine_grid(rotation_matrix, data.size())
+                        data_rotate = F.grid_sample(data, grid)
+                        image_list.append(data_rotate)
 
-                for i in range(stochastic_passes):
-                    output_list.append(torch.unsqueeze(F.softmax(model(data_rotate)), 0))
-                output_mean = torch.cat(output_list, 0).mean(0)
-                output_variance = torch.cat(output_list, 0).var(0).mean().item()
-                confidence = output_mean.data.cpu().numpy().max()
-                predict = output_mean.data.cpu().numpy().argmax()
-                unct_list.append(output_variance)
-                print('rotation degree', str(r).ljust(3),
-                      'Uncertainty : {:.4f} Predict : {} Softmax : {:.2f}'.format(output_variance, predict, confidence))
+                        logits = torch.unsqueeze(F.softmax(model(data_rotate)), 0)
+                        pred = np.argmax(logits.numpy())
+                        prob = logits.numpy().tolist()[0][0][pred]
+                        for i in range(stochastic_passes):
+                            output_list.append(torch.unsqueeze(F.softmax(model(data_rotate)), 0))
+                        output_mean = torch.cat(output_list, 0).mean(0)
 
-            plt.figure()
-            for i in range(len(rotation_list)):
-                ax = plt.subplot(3, len(rotation_list)/3, i + 1)
-                plt.text(0.5, -0.5, "{}\n{}".format(np.round(unct_list[i], 3), str(rotation_list[i])  + u'\xb0'),
-                         size=12, ha="center", transform=ax.transAxes)
-                plt.axis('off')
-                # plt.gca().set_title(str(rotation_list[i]) + u'\xb0')
-                plt.imshow(image_list[i][0, 0, :, :].data.cpu().numpy())
-            plt.show()
-            print()
+                        # Prediction Uncertainty
+                        output_variance = torch.cat(output_list, 0).var(0).mean().item()
+                        confidence = output_mean.data.cpu().numpy().max()
+
+                        # Get MC-Dropout prediction
+                        predict = output_mean.data.cpu().numpy().argmax()
+                        mc_preds.append(predict)
+                        mc_unc.append(output_variance)
+                        cnn_pred.append(pred)
+                        cnn_soft.append(prob)
+                        unct_list.append(output_variance)
+                        print('rotation degree', str(r).ljust(3),
+                              'Uncertainty: {:.4f} Predict: {} \nSoftmax: {:.2f} Pred: {}'.format(output_variance,
+                                                                                                  predict, prob, pred))
+
+
+                    # f, ax = plt.subplots(nrows=3, ncols=4)
+                    # for i, a in enumerate(ax):
+                    #     a.imshow(image_list[i][0, 0, :, :].data.cpu().numpy(), cmap='gray')
+                    #     a.set_title('Rotation: {}\nMC Pred: {} with uncertainty: {}\nCNN Pred: {} with softmax: {}'.format(rotation_list[i],
+                    #                                                                                                            mc_preds[i],
+                    #                                                                                                            mc_unc[i],
+                    #                                                                                                            cnn_pred[i],
+                    #                                                                                                            cnn_soft[i]))
+                    # plt.savefig('results/plots/rotations/mnist_{}_rot.png'.format(target.item()))
+
+                    plt.figure(figsize=(14,12))
+                    for i in range(len(rotation_list)):
+                        ax = plt.subplot(3, len(rotation_list)/3, i + 1)
+                        plt.text(0.5, -0.5, "{}\n{}".format(np.round(unct_list[i], 3), str(rotation_list[i])  + u'\xb0'),
+                                 size=12, ha="center", transform=ax.transAxes)
+                        plt.axis('off')
+                        plt.gca().set_title(str(rotation_list[i]) + u'\xb0')
+                        plt.imshow(image_list[i][0, 0, :, :].data.cpu().numpy())
+                    plt.savefig('results/plots/rotations/mnist_{}_rot.png'.format(target.item()))
+                    print()
+                else:
+                    pass

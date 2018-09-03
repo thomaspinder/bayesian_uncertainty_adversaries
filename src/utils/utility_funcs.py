@@ -2,6 +2,8 @@ import argparse
 import subprocess
 import torch
 from torchvision import datasets, transforms
+from sklearn.model_selection import StratifiedShuffleSplit
+import numpy as np
 
 
 def box_print(msg):
@@ -39,6 +41,7 @@ def experiment_parser():
     vision_parser.add_argument('-s', '--seed', help='Seed for reproducibility', type=int, required=False, default=123)
     vision_parser.add_argument('--model', help='Standard CNN or Bayesian CNN, if applicable.', type=str, default='cnn',
                                choices=['cnn', 'bcnn'])
+
     # Create RL parser
     rl_parser = subparser.add_parser('rl', help='Run Reinforcement Learning experiments.')
 
@@ -125,7 +128,57 @@ def gpu_setup(status=False):
     return bend, dtype
 
 
-def load_data(args, kwargs):
+class Sampler(object):
+    """Base class for all Samplers.
+    Every Sampler subclass has to provide an __iter__ method, providing a way
+    to iterate over indices of dataset elements, and a __len__ method that
+    returns the length of the returned iterators.
+    """
+
+    def __init__(self, data_source):
+        pass
+
+    def __iter__(self):
+        raise NotImplementedError
+
+    def __len__(self):
+        raise NotImplementedError
+
+
+class StratifiedSampler(Sampler):
+    """Stratified Sampling
+    Provides equal representation of target classes in each batch
+    """
+
+    def __init__(self, class_vector, batch_size):
+        """
+        Arguments
+        ---------
+        class_vector : torch tensor
+            a vector of class labels
+        batch_size : integer
+            batch_size
+        """
+        self.n_splits = int(class_vector.size(0) / batch_size)
+        self.class_vector = class_vector
+
+    def gen_sample_array(self):
+        s = StratifiedShuffleSplit(n_splits=self.n_splits, test_size=0.5)
+        X = torch.randn(self.class_vector.size(0), 2).numpy()
+        y = self.class_vector.numpy()
+        s.get_n_splits(X, y)
+
+        train_index, test_index = next(s.split(X, y))
+        return np.hstack([train_index, test_index])
+
+    def __iter__(self):
+        return iter(self.gen_sample_array())
+
+    def __len__(self):
+        return len(self.class_vector)
+
+
+def load_data(args, reduced,  kwargs):
     """
     Load in the MNIST dataset are setup batching.
 
@@ -133,19 +186,19 @@ def load_data(args, kwargs):
     :param kwargs: GPU specific kwargs
     :return: Train and Test datasets
     """
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=True, download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=False, transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=args.test_batch_size, shuffle=True, **kwargs)
+    tr_mnist = datasets.MNIST('../data', train=True, download=True, transform=transforms.Compose([transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))]))
+    te_mnist = datasets.MNIST('../data', train=False, transform=transforms.Compose([transforms.ToTensor(),
+                                                                                    transforms.Normalize((0.1307,),
+                                                                                                         (0.3081,))]))
+    labels = torch.from_numpy(np.arange(10))
+    sampler = StratifiedSampler(class_vector=labels, batch_size=2)
+    train_loader = torch.utils.data.DataLoader(tr_mnist, batch_size=args.batch_size, shuffle=True, **kwargs)
+    if reduced:
+        test_loader = torch.utils.data.DataLoader(te_mnist, batch_size=args.test_batch_size, sampler=sampler, **kwargs)
+    else:
+        box_print('Loading Reduced Dataset')
+        test_loader = torch.utils.data.DataLoader(te_mnist, batch_size=args.test_batch_size, shuffle=True, **kwargs)
     return train_loader, test_loader
 
 
@@ -174,9 +227,10 @@ def vision_parser():
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='interval of logging training status')
     parser.add_argument('-f', '--fgsmeps', default=0.1, type=float)
+    parser.add_argument('--small', help='Should a reduced test dataset be loaded', type=bool, default=False)
     parser.add_argument('--model', default='cnn', choices=['cnn', 'bcnn'], type=str)
     args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.cuda = False # not args.no_cuda and torch.cuda.is_available()
     return args
 
 

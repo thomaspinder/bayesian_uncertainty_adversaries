@@ -84,7 +84,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark, dtype = uf.gpu_setup(args.cuda)
     torch.set_default_tensor_type(dtype)
 
-    train_loader, test_loader = load_data(args, kwargs)
+    train_loader, test_loader = load_data(args, args.small, kwargs)
     model_standard = LeNet_standard()
     model_dropout = LeNet_dropout()
     if args.cuda:

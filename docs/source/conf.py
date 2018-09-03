@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.abspath('../../src'))
 sys.path.insert(0, os.path.abspath('../../src/vision/'))
 sys.path.insert(0, os.path.abspath('../../src/rl/'))
 sys.path.insert(0, os.path.abspath('../../src/utils/'))
+sys.path.insert(0, os.path.abspath('../../src/utils/adversary'))
 
 
 # -- General configuration ------------------------------------------------
