@@ -13,6 +13,7 @@ library(reshape2)
 library(knitr)
 library(purrr)
 library(readr)
+library(scales)
 ```
 
 # Read in Data
@@ -35,6 +36,52 @@ theme_new <- theme_set(theme_bw())
 theme_new <- theme_update(axis.text=element_text(size=42), axis.title=element_text(size=14,face="bold"))
 ```
 
+## Calculate Overall Accuracies
+
+```{r}
+results %>% 
+  mutate(orig_result = ifelse(original==truth, 1, 0), 
+         adv_result = ifelse(adversary==truth, 1, 0)) %>% 
+  group_by(method) %>% 
+  summarise(orig_acc = 100*sum(orig_result)/n(),
+            adv_acc = 100*sum(adv_result/n()))
+```
+
+
+## Exploratory HeatMap
+
+```{r}
+res_hmap <-results %>% 
+  select(c(original, truth, method)) %>% 
+  group_by(truth, method) %>% 
+  mutate(truth_count=n()) %>% 
+  ungroup() %>% 
+  group_by(original, truth, method, truth_count) %>% 
+  summarise(depth = n()) %>% 
+  mutate(fill = depth/truth_count) %>% 
+  ggplot(aes(x=as.factor(original), y = as.factor(truth), fill=fill)) +
+  geom_tile(colour='white') +
+  scale_fill_gradient(low='mintcream', high = 'steelblue', labels=percent(0.2*0:5),
+       breaks=0.2*0:5 ) +
+  labs(x='Prediction', y='Truth', fill='Accuracy (%)')+
+  geom_text(aes(label = percent(fill)), size=6) +
+  facet_grid(~method) +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28), strip.text.x = element_text(size=28)) +
+  guides(fill=guide_legend(
+                 keywidth=0.1,
+                 keyheight=0.1,
+                 default.unit="inch")
+      )
+
+res_hmap
+ggsave('plots/res_hmap.pdf', plot = res_hmap, width = 45, height=26, units = 'cm', dpi = 300)
+
+```
+__Fix Colouring lower scale and make gradients labels better spaced and percentages. Try overlaying numbers onto tiles.__
+
+
 ## Calculate Proportion Correct
 
 ```{r}
@@ -47,15 +94,23 @@ results_eps <- results %>%
   melt(id.vars=c('epsilon', 'method'))
 ```
 
+### Epsilon and accuracy correlation
+```{r}
+ep_vs_acc <- lm(I(value-0.984) ~ 0 +epsilon , data=results_eps )
+summary(ep_vs_acc)
+```
+
 ### Plot
 
 ```{r}
 p <- results_eps %>%
   filter(variable=='adversary_perc') %>% 
+  filter(epsilon<1.01) %>% 
   ggplot(aes(x=epsilon, y=value, colour=method)) +
-  geom_line(size=1, alpha =0.6)+
+  geom_line(size=2, alpha =0.6)+
   geom_point(size = 3) +
   scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = seq(0, 1, 0.1), breaks = seq(0,1, 0.1))+
   scale_colour_discrete('Evaluation', labels=c('BCNN', 'CNN')) +
   geom_hline(yintercept=0.1, size=2, alpha =0.8) +
   labs(x = expression(epsilon), y= 'Accuracy (%)', colour='Evaluation', title=expression(paste('Effects of ', epsilon, ' on A Network\'s Accuracy', sep =''))) +
@@ -84,12 +139,11 @@ bcnn_confs <- bcnn_results %>%
             orig_se = 1.96*(sqrt(var(original_confidence)/n())))
 
 
-ttest_res <- t.test(bcnn_results$adversary_confidence[bcnn_results$result==0], bcnn_results$adversary_confidence[bcnn_results$result==1])
 ttest_adv <- t.test(bcnn_results$adversary_confidence, bcnn_results$original_confidence)
-p_val <- ttest_res$p.value
+
 ```
 
-When conducting a t-test in the difference in mean confidence between the BCNN's confidence in unperturbed vs. perturbed observations we generate a p-value of `r p_val`.
+When conducting a t-test in the difference in mean uncertainty between the BCNN's confidence in unperturbed vs. perturbed observations we generate a p-value of `r p_val`.
 
 ## Bayesian Significance
 We can compute the Bayesian equivalent of this p-value through the following
@@ -97,8 +151,8 @@ We can compute the Bayesian equivalent of this p-value through the following
 ### Visualise data distributions
 ```{r}
 set.seed(123)
-adv_conf <- sample(bcnn_results$adversary_confidence, size = 1000, replace = FALSE)
-original_conf <- sample(bcnn_results$original_confidence, size=1000, replace = FALSE)
+adv_conf <- sample(bcnn_results$adversary_confidence, size = 500, replace = FALSE)
+original_conf <- sample(bcnn_results$original_confidence, size=500, replace = FALSE)
 pooled <- c(adv_conf, original_conf)
 
 # Visaulise
@@ -106,14 +160,14 @@ bcnn_hist <-bcnn_results %>%
   select(c(method, adversary_confidence, original_confidence)) %>% 
   melt(id.vars='method') %>% 
   ggplot(aes(x=value, fill=variable)) + 
-  geom_density(alpha=0.7) +
+  geom_histogram(bins=50) +
   scale_fill_discrete('Image Type', labels=c('Adversarial Example', 'Original')) +
   facet_wrap(~variable) +
   theme_bw() +
   theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
         legend.text=element_text(size=28), legend.title = element_text(size=28))
 
-
+bcnn_hist
 # Save
 ggsave('plots/bcnn_uncertainties_hist.pdf', plot = bcnn_hist, width = 50, height=22, units = 'cm', dpi = 300)
 ```
@@ -177,7 +231,7 @@ cpd.model <- jags.model(file='mhastings.txt',
                                   Ntotal=length(pooled)))
 # Run
 update(cpd.model, 1000)
-chain <- coda.samples(model = cpd.model, n.iter = 50000,
+chain <- coda.samples(model = cpd.model, n.iter = 10000,
                       variable.names = c('mu', 'sigma'))
 plot(chain)
 rchain <- as.matrix(chain)
@@ -213,6 +267,17 @@ library(e1071)
 library(caret)
 s_c_matrix <- confusionMatrix(as.factor(xray$standard_pred), reference = as.factor(xray$truth))
 kable(s_c_matrix$table)
+```
+
+```{r}
+mc_rec <- recall(mc_c_matrix$table)
+mc_prec <- precision(mc_c_matrix$table)
+cnn_rec <- recall(s_c_matrix$table)
+cnn_prec <- precision(s_c_matrix$table)
+print(paste('BCNN Recall: ', mc_rec, sep=''))
+print(paste('BCNN Precision: ', mc_prec, sep=''))
+print(paste('CNN Recall: ', cnn_rec, sep=''))
+print(paste('CNN Precision: ', cnn_prec, sep=''))
 ```
 
 ## X-Ray Adversaries

@@ -31,7 +31,7 @@ def train(model, opt, epoch, args, train_loader):
     :return: Trained model
     """
     model.train()
-    lr = args.lr * (0.1 ** (epoch // 10))
+    lr = args.lr
     opt.param_groups[0]['lr'] = lr
     for batch_idx, (data, target) in enumerate(tqdm(train_loader, desc='Batching Training Data')):
         if args.cuda:
