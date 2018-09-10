@@ -165,31 +165,20 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
                               'Uncertainty: {:.4f} Predict: {} \nSoftmax: {:.2f} Pred: {}'.format(output_variance,
                                                                                                   predict, prob, pred))
 
-
-                    # f, ax = plt.subplots(nrows=3, ncols=4)
-                    # for i, a in enumerate(ax):
-                    #     a.imshow(image_list[i][0, 0, :, :].data.cpu().numpy(), cmap='gray')
-                    #     a.set_title('Rotation: {}\nMC Pred: {} with uncertainty: {}\nCNN Pred: {} with softmax: {}'.format(rotation_list[i],
-                    #                                                                                                            mc_preds[i],
-                    #                                                                                                            mc_unc[i],
-                    #                                                                                                            cnn_pred[i],
-                    #                                                                                                            cnn_soft[i]))
-                    # plt.savefig('results/plots/rotations/mnist_{}_rot.png'.format(target.item()))
-
-                    plt.figure(figsize=(14,12))
+                    plt.figure(figsize=(22,20))
                     for i in range(len(rotation_list)):
                         ax = plt.subplot(3, len(rotation_list)/3, i + 1)
                         plt.tight_layout()
                         plt.subplots_adjust(hspace=0.5, bottom=0.1)
-                        plt.text(0.5, -0.35, "MC-Prediction: {} \nUncertainty: {}\n"
+                        plt.text(0.5, -0.35, "BCNN Prediction: {} \nUncertainty: {}\n"
                                             "CNN Prediction: {} "
                                          "\nSoftmax Probability: {}".format(mc_preds[i],
                                                                             np.round(mc_unc[i], 3),
                                                                             cnn_pred[i],
                                                                             np.round(cnn_soft[i]), 5),
-                                 size=12, ha="center", transform=ax.transAxes)
+                                 size=24, ha="center", transform=ax.transAxes)
                         plt.axis('off')
-                        plt.gca().set_title('Rotation: ' + str(rotation_list[i]) + u'\xb0')
+                        plt.gca().set_title('Rotation: ' + str(rotation_list[i]) + u'\xb0', size=26)
                         plt.imshow(image_list[i][0, 0, :, :].data.cpu().numpy(), cmap='gray')
                     plt.savefig('results/plots/rotations/mnist_{}_rot.png'.format(target.item()))
                     print()
