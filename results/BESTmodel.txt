@@ -1,0 +1,12 @@
+
+  model {
+    for ( i in 1:Ntotal ) {
+      y[i] ~ dt( mu[x[i]] , 1/sigma[x[i]]^2 , nu )
+    }
+    mu[1] ~ dnorm( mu1PriorMean , 1/mu1PriorSD^2 )  # prior for mu[1]
+    sigma[1] ~ dgamma( Sh1 , Ra1 )     # prior for sigma[1]
+    mu[2] ~ dnorm( mu2PriorMean , 1/mu2PriorSD^2 )  # prior for mu[2]
+    sigma[2] ~ dgamma( Sh2 , Ra2 )     # prior for sigma[2]
+    nu ~ dgamma( ShNu , RaNu ) # prior for nu
+  }
+  

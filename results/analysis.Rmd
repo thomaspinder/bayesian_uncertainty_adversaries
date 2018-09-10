@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+setwd('.')
 library(dplyr, warn.conflicts = FALSE)
 library(ggplot2, warn.conflicts = FALSE)
 library(reshape2)
@@ -14,6 +15,7 @@ library(knitr)
 library(purrr)
 library(readr)
 library(scales)
+source('BEST.R')
 ```
 
 # Read in Data
@@ -140,10 +142,9 @@ bcnn_confs <- bcnn_results %>%
 
 
 ttest_adv <- t.test(bcnn_results$adversary_confidence, bcnn_results$original_confidence)
-
 ```
 
-When conducting a t-test in the difference in mean uncertainty between the BCNN's confidence in unperturbed vs. perturbed observations we generate a p-value of `r p_val`.
+
 
 ## Bayesian Significance
 We can compute the Bayesian equivalent of this p-value through the following
@@ -238,6 +239,19 @@ rchain <- as.matrix(chain)
 hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
 mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
 ```
+
+### Testing The BEST Library
+```{r}
+best_samples <- bcnn_results %>% 
+  filter(epsilon < 0.6 & epsilon > 0.3)
+
+adv <- sample(best_samples$adversary_confidence, 1000, FALSE)
+ori <- sample(best_samples$original_confidence, 1000, FALSE)
+
+mcmcChain <- BESTmcmc(adv, ori)
+mcmc_results <- BESTplot(adv, ori, mcmcChain)
+```
+
 
 # X-Ray Results
 
