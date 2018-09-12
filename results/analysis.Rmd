@@ -14,7 +14,9 @@ library(reshape2)
 library(knitr)
 library(purrr)
 library(readr)
+library(ggmcmc)
 library(scales)
+require(gridExtra)
 source('BEST.R')
 ```
 
@@ -155,22 +157,22 @@ set.seed(123)
 adv_conf <- sample(bcnn_results$adversary_confidence, size = 500, replace = FALSE)
 original_conf <- sample(bcnn_results$original_confidence, size=500, replace = FALSE)
 pooled <- c(adv_conf, original_conf)
-
-# Visaulise
-bcnn_hist <-bcnn_results %>% 
-  select(c(method, adversary_confidence, original_confidence)) %>% 
-  melt(id.vars='method') %>% 
-  ggplot(aes(x=value, fill=variable)) + 
-  geom_histogram(bins=50) +
-  scale_fill_discrete('Image Type', labels=c('Adversarial Example', 'Original')) +
-  facet_wrap(~variable) +
-  theme_bw() +
-  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
-        legend.text=element_text(size=28), legend.title = element_text(size=28))
-
-bcnn_hist
-# Save
-ggsave('plots/bcnn_uncertainties_hist.pdf', plot = bcnn_hist, width = 50, height=22, units = 'cm', dpi = 300)
+# 
+# # Visaulise
+# bcnn_hist <-bcnn_results %>% 
+#   select(c(method, adversary_confidence, original_confidence)) %>% 
+#   melt(id.vars='method') %>% 
+#   ggplot(aes(x=value, fill=variable)) + 
+#   geom_histogram(bins=50) +
+#   scale_fill_discrete('Image Type', labels=c('Adversarial Example', 'Original')) +
+#   facet_wrap(~variable) +
+#   theme_bw() +
+#   theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+#         legend.text=element_text(size=28), legend.title = element_text(size=28))
+# 
+# bcnn_hist
+# # Save
+# ggsave('plots/bcnn_uncertainties_hist.pdf', plot = bcnn_hist, width = 50, height=22, units = 'cm', dpi = 300)
 ```
 
 ### Specify priors and likelihoods
@@ -236,8 +238,47 @@ chain <- coda.samples(model = cpd.model, n.iter = 10000,
                       variable.names = c('mu', 'sigma'))
 plot(chain)
 rchain <- as.matrix(chain)
+
+P <- data.frame(
+  Parameter=c("mu[1]", "mu[2]", "sigma[1]", "sigma[2]"),
+  Label=c("Adversarial Mu", "Original Mu", "Adversarial Sigma", 'Original Sigma'))
+s <- ggs(chain, par_labels=P)
+
+trace_ps <- ggs_traceplot(s) +theme_bw()
+density_ps <- ggs_density(s)+theme_bw()
+to_save <- arrangeGrob(trace_ps, density_ps, ncol=2, nrow=1)
+ggsave('plots/advs_mh.pdf', plot = to_save)#, width = 40, height=22, units = 'cm', dpi = 300)
+
+rchain_df <- data.frame(rchain)
+colnames(rchain_df) <- c('Adversarial Mu', 'Original Mu', 'sig1', 'sig2')
+post_mus <- rchain_df %>% 
+  select(c('Adversarial Mu', 'Original Mu')) %>% 
+  melt() %>% 
+  ggplot(aes(x = value, fill=variable)) +
+  geom_density(alpha=0.7) +
+  labs(x='Posterior Mean Values', title='Densities of Posterior Values for Mu',y = 'Desnity', fill='Adversarial Presence') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+ggsave('plots/posterior_mus.pdf', plot = post_mus, width = 50, height=30, units = 'cm', dpi = 300)
+
+par(mfrow=c(1,1))
 hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
 mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
+```
+
+
+### Visualise Posterior
+```{r}
+post_means <- colMeans(rchain_df)
+adv_post_samps <- rnorm(10000, mean = post_means[1], sd=post_means[3])
+ori_post_samps <- rnorm(10000, mean = post_means[2], sd=post_means[4])
+posteriors <- data.frame(adv=adv_post_samps, ori=ori_post_samps)
+posteriors %>% 
+  melt() %>% 
+  ggplot(aes(x=value, fill=variable)) +
+  geom_density(alpha=0.7)
 ```
 
 ### Testing The BEST Library
