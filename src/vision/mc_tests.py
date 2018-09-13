@@ -165,7 +165,7 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
                               'Uncertainty: {:.4f} Predict: {} \nSoftmax: {:.2f} Pred: {}'.format(output_variance,
                                                                                                   predict, prob, pred))
 
-                    plt.figure(figsize=(22,20))
+                    plt.figure(figsize=(44,40))
                     for i in range(len(rotation_list)):
                         ax = plt.subplot(3, len(rotation_list)/3, i + 1)
                         plt.tight_layout()
@@ -176,9 +176,9 @@ def uncertainty_test(model, args, test_loader, stochastic_passes=100):
                                                                             np.round(mc_unc[i], 3),
                                                                             cnn_pred[i],
                                                                             np.round(cnn_soft[i]), 5),
-                                 size=24, ha="center", transform=ax.transAxes)
+                                 size=40, ha="center", transform=ax.transAxes)
                         plt.axis('off')
-                        plt.gca().set_title('Rotation: ' + str(rotation_list[i]) + u'\xb0', size=26)
+                        plt.gca().set_title('Rotation: ' + str(rotation_list[i]) + u'\xb0', size=40)
                         plt.imshow(image_list[i][0, 0, :, :].data.cpu().numpy(), cmap='gray')
                     plt.savefig('results/plots/rotations/mnist_{}_rot.png'.format(target.item()))
                     print()

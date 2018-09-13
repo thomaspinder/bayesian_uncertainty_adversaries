@@ -105,7 +105,7 @@ class RLExperiments:
 
         :return: Terminal command to run experiments.
         """
-        subprocess.call('python -m src.rl.main_rl --train={} --video_path=./video --logs_path=./logs'.format(self.args.train),
+        subprocess.call('python -m src.rl.rl_run --train={} --video_path=./video --logs_path=./logs'.format(self.args.train),
                         shell=True)
 
 

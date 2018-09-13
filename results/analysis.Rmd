@@ -485,8 +485,8 @@ xray_advs %>%
 ### Assess Xray uncertainties
 ```{r}
 xray_uncs <- xray_advs %>% 
-  filter(epsilon > 0.03) %>% 
-  filter(epsilon < 0.2)
+  filter(epsilon > 0.01) %>% 
+  filter(epsilon < 0.5)
 
 xr_ori <- xray_uncs$mc_conf
 xr_adv <- xray_uncs$mc_conf_1
@@ -505,7 +505,7 @@ x <- c(rep(1, length(xr_adv)), rep(2, length(xr_ori)))
 
 # Initialise model
 xr.cpd.model <- jags.model(file='mhastings.txt',
-                        data=list(y=pooled,
+                        data=list(y=xr_pooled,
                                   x=x,
                                   mu_pooled=mean(xr_pooled),
                                   tau_pooled=1/(1000 * sd(xr_pooled))^2,
@@ -543,9 +543,49 @@ xr_post_mus <- xr_rchain_df %>%
 
 ggsave('plots/xr_post_mus.pdf', plot = xr_post_mus, width = 50, height=30, units = 'cm', dpi = 300)
 
-par(mfrow=c(1,1))
-hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
-mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
+```
 
+
+### Visualise XRay Posterior
+```{r}
+xr_post_means <- colMeans(xr_rchain_df)
+xr_adv_post_samps <- rnorm(100000, mean = xr_post_means[1], sd=xr_post_means[3])
+xr_ori_post_samps <- rnorm(100000, mean = xr_post_means[2], sd=xr_post_means[4])
+
+xr_posteriors <- data.frame(Present=xr_adv_post_samps, Absent=xr_ori_post_samps)
+xr_post_dists <- xr_posteriors %>% 
+  melt() %>% 
+  ggplot(aes(x=value, fill=variable)) +
+  geom_density(alpha=0.7) +
+  labs(x='Uncertainty Value', title='Posterior Densities For Uncertainty Estimates in X-Ray Images',y = 'Density', fill='Adversarial Presence') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+ggsave('plots/xr_post_dists.pdf', plot = xr_post_dists, width = 50, height=30, units = 'cm', dpi = 300)
+```
+
+
+### Test for Posterior Differences 
+```{r}
+sum(xr_posteriors$Present-xr_posteriors$Absent>0)
+xr_posteriors$diff <- xr_posteriors$Present-xr_posteriors$Absent
+mean(xr_posteriors$Present-xr_posteriors$Absent >0)
+
+#plot cdf
+xr_diff_cdf <- xr_posteriors %>% 
+  ggplot(aes(x = diff)) +
+  stat_ecdf(size=3) +
+  labs(x=expression(paste('Uncertainty Difference, ', Delta)), y=expression(paste('F(', Delta, ')')), title='CDF of Differences for 100000 Posterior Samples In Pneumonia X-Rays') +
+  scale_fill_discrete(guide=FALSE) +
+  # scale_x_continuous(limits=c(-0.005, 0.01),
+  #                    breaks = seq(-0.005, 0.01, by =0.001))+
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+# xr_diff_cdf
+
+ggsave('plots/xr_diff_cdf.pdf', plot = xr_diff_cdf, width = 50, height=30, units = 'cm', dpi = 300)
 ```
 
