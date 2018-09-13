@@ -4,3 +4,4 @@ __pycache__/*
 src/vision/__pycache__/tests.cpython-36.pyc
 data/*
 *.h5
+src/rl/*

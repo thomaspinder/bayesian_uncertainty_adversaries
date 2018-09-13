@@ -2,7 +2,16 @@
 title: "Result Plots"
 author: "Thomas Pinder"
 date: "18 August 2018"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_sections: true
+    theme: united
+
 ---
 
 ```{r setup, include=FALSE}
@@ -20,7 +29,8 @@ require(gridExtra)
 source('BEST.R')
 ```
 
-# Read in Data
+# Initial Work
+### Read in Data
 ```{r}
 cnn_results <- read.csv('cnn_exp3_all.csv')
 bcnn_results<- read.csv('bcnn_exp3_all.csv')
@@ -32,7 +42,7 @@ bcnn_rbind <- bcnn_results %>%
 results <- rbind(cnn_results, bcnn_rbind)
 ```
 
-# Set GGPlot Theme Config
+### Set GGPlot Theme Config
 
 ```{r}
 theme_new <- theme_set(theme_bw())
@@ -42,6 +52,9 @@ theme_new <- theme_update(axis.text=element_text(size=42), axis.title=element_te
 
 ## Calculate Overall Accuracies
 
+# MNIST Analysis
+## High Level non-Bayesian analysis
+### Overall Accuracies
 ```{r}
 results %>% 
   mutate(orig_result = ifelse(original==truth, 1, 0), 
@@ -52,7 +65,7 @@ results %>%
 ```
 
 
-## Exploratory HeatMap
+### Exploratory HeatMap
 
 ```{r}
 res_hmap <-results %>% 
@@ -86,7 +99,7 @@ ggsave('plots/res_hmap.pdf', plot = res_hmap, width = 45, height=26, units = 'cm
 __Fix Colouring lower scale and make gradients labels better spaced and percentages. Try overlaying numbers onto tiles.__
 
 
-## Calculate Proportion Correct
+### Calculate Proportion Correct
 
 ```{r}
 results_eps <- results %>% 
@@ -94,9 +107,12 @@ results_eps <- results %>%
          adversary_correct = ifelse(adversary == truth, 1, 0)) %>% 
   group_by(method, epsilon) %>% 
   summarise(original_perc = sum(original_correct)/n(),
-            adversary_perc = sum(adversary_correct)/n()) %>% 
-  melt(id.vars=c('epsilon', 'method'))
+            adversary_perc = sum(adversary_correct)/n(),
+            adv_err = 1.96*(var(adversary_correct)/sqrt(n()))) %>% 
+  melt(id.vars=c('epsilon', 'method', 'adv_err'))
 ```
+
+
 
 ### Epsilon and accuracy correlation
 ```{r}
@@ -104,9 +120,10 @@ ep_vs_acc <- lm(I(value-0.984) ~ 0 +epsilon , data=results_eps )
 summary(ep_vs_acc)
 ```
 
-### Plot
+### Plot MNIST Acc. vs Epsilon
 
 ```{r}
+pd <- position_dodge(0.1) # move them .05 to the left and right
 p <- results_eps %>%
   filter(variable=='adversary_perc') %>% 
   filter(epsilon<1.01) %>% 
@@ -115,6 +132,7 @@ p <- results_eps %>%
   geom_point(size = 3) +
   scale_y_continuous(labels = scales::percent) +
   scale_x_continuous(labels = seq(0, 1, 0.1), breaks = seq(0,1, 0.1))+
+  geom_errorbar(aes(ymin=value-adv_err, ymax=value+adv_err), width=0.08) +
   scale_colour_discrete('Evaluation', labels=c('BCNN', 'CNN')) +
   geom_hline(yintercept=0.1, size=2, alpha =0.8) +
   labs(x = expression(epsilon), y= 'Accuracy (%)', colour='Evaluation', title=expression(paste('Effects of ', epsilon, ' on A Network\'s Accuracy', sep =''))) +
@@ -127,7 +145,7 @@ p
 ggsave('plots/fgsm_acc.pdf', plot = p, width = 40, height=22, units = 'cm', dpi = 300)
 ```
 
-## Assessing Uncertainty
+### Assessing Uncertainty
 ```{r}
 
 bcnn_results <- bcnn_results %>% 
@@ -148,14 +166,17 @@ ttest_adv <- t.test(bcnn_results$adversary_confidence, bcnn_results$original_con
 
 
 
-## Bayesian Significance
+## Bayesian Inference MNIST
 We can compute the Bayesian equivalent of this p-value through the following
 
 ### Visualise data distributions
 ```{r}
 set.seed(123)
-adv_conf <- sample(bcnn_results$adversary_confidence, size = 500, replace = FALSE)
-original_conf <- sample(bcnn_results$original_confidence, size=500, replace = FALSE)
+bcnn_results_f <- bcnn_results %>% 
+  filter(epsilon < 0.8) %>% 
+  filter(epsilon > 0.4)
+adv_conf <- sample(bcnn_results_f$adversary_confidence, size = 1000, replace = FALSE)
+original_conf <- sample(bcnn_results_f$original_confidence, size=1000, replace = FALSE)
 pooled <- c(adv_conf, original_conf)
 # 
 # # Visaulise
@@ -175,6 +196,9 @@ pooled <- c(adv_conf, original_conf)
 # ggsave('plots/bcnn_uncertainties_hist.pdf', plot = bcnn_hist, width = 50, height=22, units = 'cm', dpi = 300)
 ```
 
+
+
+
 ### Specify priors and likelihoods
 
 ```{r}
@@ -189,11 +213,15 @@ prior <- function(parameters){
 }
 ```
 
+
 ### And the Posterior
 
 ```{r}
 posterior <- function(parameters) {likelihood(parameters) * prior(parameters)}
 ```
+
+
+
 
 ### Use MH to get our Posterior
 #### Define Our Model
@@ -247,7 +275,7 @@ s <- ggs(chain, par_labels=P)
 trace_ps <- ggs_traceplot(s) +theme_bw()
 density_ps <- ggs_density(s)+theme_bw()
 to_save <- arrangeGrob(trace_ps, density_ps, ncol=2, nrow=1)
-ggsave('plots/advs_mh.pdf', plot = to_save)#, width = 40, height=22, units = 'cm', dpi = 300)
+ggsave('plots/advs_mh.pdf', plot = to_save, width = 40, height=22, units = 'cm', dpi = 300)
 
 rchain_df <- data.frame(rchain)
 colnames(rchain_df) <- c('Adversarial Mu', 'Original Mu', 'sig1', 'sig2')
@@ -272,14 +300,46 @@ mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
 ### Visualise Posterior
 ```{r}
 post_means <- colMeans(rchain_df)
-adv_post_samps <- rnorm(10000, mean = post_means[1], sd=post_means[3])
-ori_post_samps <- rnorm(10000, mean = post_means[2], sd=post_means[4])
-posteriors <- data.frame(adv=adv_post_samps, ori=ori_post_samps)
-posteriors %>% 
+adv_post_samps <- rnorm(100000, mean = post_means[1], sd=post_means[3])
+ori_post_samps <- rnorm(100000, mean = post_means[2], sd=post_means[4])
+
+posteriors <- data.frame(Present=adv_post_samps, Absent=ori_post_samps)
+post_dists <- posteriors %>% 
   melt() %>% 
   ggplot(aes(x=value, fill=variable)) +
-  geom_density(alpha=0.7)
+  geom_density(alpha=0.7) +
+  labs(x='Uncertainty Value', title='Posterior Densities For Uncertainty Estimates',y = 'Density', fill='Adversarial Presence') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+ggsave('plots/post_dists.pdf', plot = post_dists, width = 50, height=30, units = 'cm', dpi = 300)
+
 ```
+
+### Test Probability That Adversarial Uncertainty is Less than Unperturbed Uncertainty
+```{r}
+sum(posteriors$Present-posteriors$Absent>0)
+posteriors$diff <- posteriors$Present-posteriors$Absent
+posteriors$group <- 'a'
+
+#plot cdf
+diff_cdf <- posteriors %>% 
+  ggplot(aes(x = diff, fill=group)) +
+  stat_ecdf(size=3) +
+  labs(x=expression(paste('Uncertainty Difference, ', Delta)), y=expression(paste('F(', Delta, ')')), title='CDF of Differences for 100000 Posterior Samples') +
+  scale_fill_discrete(guide=FALSE) +
+  scale_x_continuous(limits=c(-0.001, 0.007),
+                     breaks = seq(-0.001, 0.007, by =0.002))+
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+
+
+ggsave('plots/diff_cdf.pdf', plot = diff_cdf, width = 50, height=30, units = 'cm', dpi = 300)
+```
+
 
 ### Testing The BEST Library
 ```{r}
@@ -294,7 +354,7 @@ mcmc_results <- BESTplot(adv, ori, mcmcChain)
 ```
 
 
-# X-Ray Results
+# X-Ray Analysis
 
 ### Load in Data
 ```{r}
@@ -313,8 +373,19 @@ st_acc = round((sum(xray$standard_correct)/dim(xray)[1])*100, 2)
 ```{r}
 library(e1071)
 library(caret)
+
 mc_c_matrix <- confusionMatrix(as.factor(xray$mc_pred), reference = as.factor(xray$truth))
 kable(mc_c_matrix$table)
+mc_cm_df <- data.frame(mc_c_matrix$table)
+mc_cm <- mc_cm_df %>% 
+  ggplot(aes(x=Reference, y=Prediction, fill=Freq)) + 
+  geom_tile() +
+  geom_text(aes(label=Freq), colour='white', size=14) +
+  labs(x='Ground Truth', y='Prediction', title='BCNN Confusion Matrix') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
 ```
 #### Standard CNN
 ```{r}
@@ -322,6 +393,18 @@ library(e1071)
 library(caret)
 s_c_matrix <- confusionMatrix(as.factor(xray$standard_pred), reference = as.factor(xray$truth))
 kable(s_c_matrix$table)
+cn_cm_df <- data.frame(s_c_matrix$table)
+cn_cm <- cn_cm_df %>% 
+  ggplot(aes(x=Reference, y=Prediction, fill=Freq)) + 
+  geom_tile() +
+  geom_text(aes(label=Freq), colour='white', size=14) +
+  labs(x='Ground Truth', y='Prediction', title='CNN Confusion Matrix') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+con_mats <- arrangeGrob(cn_cm, mc_cm, ncol=2)
+ggsave('plots/xray_cms.pdf', plot = con_mats, width = 50, height=30, units = 'cm', dpi = 300)
 ```
 
 ```{r}
@@ -336,13 +419,17 @@ print(paste('CNN Precision: ', cnn_prec, sep=''))
 ```
 
 ## X-Ray Adversaries
+### Load Data
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # Merge files
 all_files <- list.files('xray_adv', pattern = '*.csv', full.names = TRUE)
 xray_advs <- map_df(all_files, read_csv, .id='id')
 # kable(head(xray_advs))
 ```
-## Calculate Performance
+
+
+
+### Calculate Performance
 ```{r}
 xray_advs <- xray_advs %>% 
   mutate(orig_correct = ifelse(standard_pred==truth, 1, 0),
@@ -351,9 +438,9 @@ xray_advs <- xray_advs %>%
          mc_adv_correct = ifelse(mc_adv==truth, 1, 0),
          mc_fooled = ifelse(mc_correct==1 && mc_adv_correct==1, 1, 0))
 
-xray_advs %>% 
+xray_eps_g <- xray_advs %>% 
   select(c(orig_adv_correct, mc_adv_correct, epsilon)) %>%
-  filter(epsilon < 0.1) %>% 
+  filter(epsilon < 1) %>% 
   melt(id.vars='epsilon') %>% 
   group_by(epsilon, variable) %>% 
   summarise(acc = sum(value)/n()) %>% 
@@ -369,6 +456,9 @@ xray_advs %>%
   theme_bw() +
   theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=32),
         legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+ggsave('plots/xray_eps.pdf', plot = xray_eps_g, width = 50, height=30, units = 'cm', dpi = 300)
+
 ```
 
 
@@ -390,5 +480,72 @@ xray_advs %>%
   select(c(mc_correct, mc_conf)) %>% 
   ggplot(aes(x=mc_conf, colour=as.factor(mc_correct))) +
            geom_density(bw=0.06)
+```
+
+### Assess Xray uncertainties
+```{r}
+xray_uncs <- xray_advs %>% 
+  filter(epsilon > 0.03) %>% 
+  filter(epsilon < 0.2)
+
+xr_ori <- xray_uncs$mc_conf
+xr_adv <- xray_uncs$mc_conf_1
+xr_pooled <- c(xr_adv, xr_ori)
+
+# Standard t-test
+t.test(xr_adv, xr_ori, alternative = 'greater')
+
+# MCMC
+mu1 = 0.01; sig1 = 10; mu2 = 0.01; sig2 = 10
+parameters <- c(mu1, sig1, mu2, sig2)
+
+
+# Indicator variable
+x <- c(rep(1, length(xr_adv)), rep(2, length(xr_ori)))
+
+# Initialise model
+xr.cpd.model <- jags.model(file='mhastings.txt',
+                        data=list(y=pooled,
+                                  x=x,
+                                  mu_pooled=mean(xr_pooled),
+                                  tau_pooled=1/(1000 * sd(xr_pooled))^2,
+                                  sigma_low=sd(xr_pooled) / 1000,
+                                  sigma_high=sd(xr_pooled) * 1000,
+                                  Ntotal=length(xr_pooled)))
+# Run
+update(xr.cpd.model, 1000)
+xr_chain <- coda.samples(model = cpd.model, n.iter = 10000,
+                      variable.names = c('mu', 'sigma'))
+plot(xr_chain)
+xr_rchain <- as.matrix(xr_chain)
+
+P <- data.frame(
+  Parameter=c("mu[1]", "mu[2]", "sigma[1]", "sigma[2]"),
+  Label=c("Adversarial Mu", "Original Mu", "Adversarial Sigma", 'Original Sigma'))
+xr_s <- ggs(xr_chain, par_labels=P)
+
+xr_trace_ps <- ggs_traceplot(xr_s) +theme_bw()
+xr_density_ps <- ggs_density(xr_s)+theme_bw()
+xr_to_save <- arrangeGrob(xr_trace_ps, xr_density_ps, ncol=2, nrow=1)
+ggsave('plots/xr_advs_mh.pdf', plot = xr_to_save, width = 40, height=22, units = 'cm', dpi = 300)
+
+xr_rchain_df <- data.frame(xr_rchain)
+colnames(xr_rchain_df) <- c('Adversarial Mu', 'Original Mu', 'sig1', 'sig2')
+xr_post_mus <- xr_rchain_df %>% 
+  select(c('Adversarial Mu', 'Original Mu')) %>% 
+  melt() %>% 
+  ggplot(aes(x = value, fill=variable)) +
+  geom_density(alpha=0.7) +
+  labs(x='Posterior Mean Values', title='Densities of Posterior Values for Mu',y = 'Desnity', fill='Adversarial Presence') +
+  theme_bw() +
+  theme(axis.text=element_text(size=30), axis.title = element_text(size=28), plot.title=element_text(size=36),
+        legend.text=element_text(size=28), legend.title = element_text(size=28))
+
+ggsave('plots/xr_post_mus.pdf', plot = xr_post_mus, width = 50, height=30, units = 'cm', dpi = 300)
+
+par(mfrow=c(1,1))
+hist(rchain[, 'mu[1]'] - rchain[, 'mu[2]'])
+mean(rchain[, 'mu[1]'] - rchain[, 'mu[2]'] > 0)
+
 ```
 
